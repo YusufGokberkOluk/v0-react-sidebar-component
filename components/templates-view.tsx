@@ -30,6 +30,21 @@ export default function TemplatesView() {
   const [favorites, setFavorites] = useState<string[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
 
+  // Load view mode from localStorage on component mount
+  useEffect(() => {
+    // Load view mode from localStorage on component mount
+    const storedViewMode = localStorage.getItem("templateViewMode") as "grid" | "list" | null
+    if (storedViewMode && (storedViewMode === "grid" || storedViewMode === "list")) {
+      setViewMode(storedViewMode)
+    }
+  }, [])
+
+  // Add this useEffect to save the view mode to localStorage when it changes
+  useEffect(() => {
+    // Save view mode to localStorage whenever it changes
+    localStorage.setItem("templateViewMode", viewMode)
+  }, [viewMode])
+
   // Sample template data with more templates
   const templates: Template[] = [
     {
@@ -88,7 +103,7 @@ export default function TemplatesView() {
       tags: ["research", "ai", "academic"],
       thumbnail: "/collaborative-ai-research.png",
       isFeatured: true,
-      isAIPowered: true,
+      isAIPowered: false,
       isCustom: false,
       createdAt: "2023-05-15",
     },
@@ -159,7 +174,7 @@ export default function TemplatesView() {
       description: "Track your daily habits and build consistency with visual progress indicators.",
       category: "productivity",
       tags: ["habits", "tracking", "goals"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=habit%20tracker",
+      thumbnail: "/colorful-habit-board.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -171,7 +186,7 @@ export default function TemplatesView() {
       description: "Template for capturing key insights and quotes from books you're reading.",
       category: "academic",
       tags: ["reading", "books", "notes"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=book%20notes",
+      thumbnail: "/open-book-notes.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -183,7 +198,7 @@ export default function TemplatesView() {
       description: "AI-powered template for learning new languages with vocabulary and grammar exercises.",
       category: "academic",
       tags: ["language", "learning", "ai"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=language%20learning",
+      thumbnail: "/global-language-exchange.png",
       isFeatured: true,
       isAIPowered: true,
       isCustom: false,
@@ -195,7 +210,7 @@ export default function TemplatesView() {
       description: "Track your workouts, nutrition, and fitness goals in one organized template.",
       category: "health",
       tags: ["fitness", "health", "workout"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=fitness%20tracker",
+      thumbnail: "/wrist-activity-monitor.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -207,7 +222,7 @@ export default function TemplatesView() {
       description: "Track your daily moods and emotions with reflection prompts and patterns analysis.",
       category: "health",
       tags: ["mental health", "mood", "journal"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=mood%20journal",
+      thumbnail: "/colorful-mood-tracker.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -219,7 +234,7 @@ export default function TemplatesView() {
       description: "AI-powered template with prompts and structure for creative writing and storytelling.",
       category: "writing",
       tags: ["creative", "writing", "ai"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=creative%20writing",
+      thumbnail: "/whimsical-wordscape.png",
       isFeatured: true,
       isAIPowered: true,
       isCustom: false,
@@ -300,7 +315,9 @@ export default function TemplatesView() {
 
   const handlePreview = (template: Template, e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     console.log("Preview template:", template.id)
+    // In a real app, this would open a modal with the template preview
   }
 
   const toggleCategoryDropdown = () => {
@@ -314,6 +331,45 @@ export default function TemplatesView() {
       setSelectedCategory(category.name)
     }
     setIsCategoryDropdownOpen(false)
+  }
+
+  const handleShareTemplate = (templateId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Create a shareable URL
+    const shareUrl = `${window.location.origin}/templates?id=${templateId}`
+
+    // Try to use the Web Share API if available
+    if (navigator.share) {
+      navigator
+        .share({
+          title: `étude Template: ${templates.find((t) => t.id === templateId)?.title}`,
+          text: "Check out this template I found on étude!",
+          url: shareUrl,
+        })
+        .catch((error) => {
+          console.log("Error sharing template:", error)
+          // Fallback to copying to clipboard
+          copyToClipboard(shareUrl)
+        })
+    } else {
+      // Fallback for browsers that don't support the Web Share API
+      copyToClipboard(shareUrl)
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        alert("Link copied to clipboard!")
+      })
+      .catch((err) => {
+        console.error("Failed to copy link: ", err)
+        // Ultimate fallback - show the link to manually copy
+        alert(`Copy this link: ${text}`)
+      })
   }
 
   return (
@@ -391,6 +447,7 @@ export default function TemplatesView() {
                   }`}
                   aria-label="Grid View"
                   title="Grid View"
+                  aria-pressed={viewMode === "grid"}
                 >
                   <Grid className="h-4 w-4" />
                 </button>
@@ -401,6 +458,7 @@ export default function TemplatesView() {
                   }`}
                   aria-label="List View"
                   title="List View"
+                  aria-pressed={viewMode === "list"}
                 >
                   <List className="h-4 w-4" />
                 </button>
@@ -677,8 +735,8 @@ export default function TemplatesView() {
                   key={template.id}
                   className="bg-white rounded-lg shadow-sm border border-[#ABD1B5]/10 overflow-hidden hover:shadow-md transition-shadow"
                 >
-                  <div className="flex">
-                    <div className="relative w-32 h-32 bg-[#EDF4ED] flex-shrink-0">
+                  <div className="flex flex-col sm:flex-row">
+                    <div className="relative w-full sm:w-32 h-32 bg-[#EDF4ED] flex-shrink-0">
                       <Image
                         src={template.thumbnail || "/placeholder.svg"}
                         alt={template.title}
@@ -695,6 +753,11 @@ export default function TemplatesView() {
                       {template.isCustom && (
                         <div className="absolute top-2 left-2 bg-[#13262F]/70 text-white text-xs px-2 py-1 rounded-full">
                           Custom
+                        </div>
+                      )}
+                      {isFavorite(template.id) && (
+                        <div className="absolute bottom-2 right-2 text-[#79B791]">
+                          <Star className="h-4 w-4 fill-[#79B791]" />
                         </div>
                       )}
                     </div>
@@ -717,23 +780,38 @@ export default function TemplatesView() {
                           </span>
                         ))}
                       </div>
-                      <div className="flex justify-between items-center mt-4">
-                        <div className="flex items-center space-x-4">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 mt-4">
+                        <div className="flex items-center gap-3">
                           <button
                             onClick={(e) => handlePreview(template, e)}
                             className="text-[#79B791] text-sm font-medium hover:text-[#ABD1B5] transition-colors"
                           >
                             Preview
                           </button>
-                          <span className="text-xs text-[#13262F]/40">{template.category}</span>
+                          <span className="text-xs text-[#13262F]/40 capitalize">{template.category}</span>
+                          {template.isAIPowered && (
+                            <span className="hidden sm:flex items-center text-xs text-[#79B791]">
+                              <Sparkles className="h-3 w-3 mr-1" />
+                              AI-Powered
+                            </span>
+                          )}
                         </div>
-                        <Link
-                          href={`/app/new?template=${template.id}`}
-                          className="flex items-center text-[#13262F] text-sm font-medium hover:text-[#79B791] transition-colors"
-                        >
-                          Use Template
-                          <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => handleShareTemplate(template.id, e)}
+                            className="text-[#13262F]/60 hover:text-[#13262F] text-sm font-medium transition-colors"
+                            aria-label="Share template"
+                          >
+                            Share
+                          </button>
+                          <Link
+                            href={`/app/new?template=${template.id}`}
+                            className="flex items-center text-[#13262F] text-sm font-medium hover:text-[#79B791] transition-colors"
+                          >
+                            Use Template
+                            <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   </div>
