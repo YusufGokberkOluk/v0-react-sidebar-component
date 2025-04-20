@@ -1,13 +1,15 @@
 "use client"
 
 import type React from "react"
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { Star, LogOut, Plus, Trash2, Search, ChevronDown, Check, FolderPlus, LayoutList, Grid2x2 } from "lucide-react"
 
 interface Page {
   id: string
   title: string
   isFavorite: boolean
+  content?: string // Optional content field
+  tags?: string[] // Optional tags field
 }
 
 interface SidebarProps {
@@ -17,6 +19,7 @@ interface SidebarProps {
   onToggleFavorite?: (pageId: string) => void
 }
 
+// Add viewMode type and state inside the Sidebar component
 type ViewMode = "list" | "grid"
 
 export default function Sidebar({ pages = [], selectedPageId, onNavigate, onToggleFavorite }: SidebarProps) {
@@ -25,6 +28,23 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false)
   const [currentWorkspace, setCurrentWorkspace] = useState("My Workspace")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
+  const [isInitialized, setIsInitialized] = useState(false)
+
+  // Load view mode from localStorage on component mount
+  useEffect(() => {
+    const storedViewMode = localStorage.getItem("sidebarViewMode") as ViewMode | null
+    if (storedViewMode && (storedViewMode === "list" || storedViewMode === "grid")) {
+      setViewMode(storedViewMode)
+    }
+    setIsInitialized(true)
+  }, [])
+
+  // Save view mode to localStorage whenever it changes
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("sidebarViewMode", viewMode)
+    }
+  }, [viewMode, isInitialized])
 
   // Sample workspaces
   const workspaces = ["My Workspace", "Project X", "Personal"]
@@ -174,25 +194,31 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-[#EDF4ED]/70">Pages</h2>
 
-          {/* View Mode Toggle */}
+          {/* View Mode Toggle - Enhanced with active state indicators */}
           <div className="flex rounded-md overflow-hidden border border-[#79B791]/20">
             <button
               onClick={() => handleSetViewMode("list")}
               className={`p-1 transition-colors ${
-                viewMode === "list" ? "bg-[#79B791]/30 text-[#EDF4ED]" : "hover:bg-[#79B791]/10"
+                viewMode === "list"
+                  ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                  : "hover:bg-[#79B791]/10 text-[#EDF4ED]/70 hover:text-[#EDF4ED]"
               }`}
               aria-label="List View"
               title="List View"
+              aria-pressed={viewMode === "list"}
             >
               <LayoutList className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={() => handleSetViewMode("grid")}
               className={`p-1 transition-colors ${
-                viewMode === "grid" ? "bg-[#79B791]/30 text-[#EDF4ED]" : "hover:bg-[#79B791]/10"
+                viewMode === "grid"
+                  ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                  : "hover:bg-[#79B791]/10 text-[#EDF4ED]/70 hover:text-[#EDF4ED]"
               }`}
               aria-label="Grid View"
               title="Grid View"
+              aria-pressed={viewMode === "grid"}
             >
               <Grid2x2 className="h-3.5 w-3.5" />
             </button>
@@ -248,39 +274,86 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
           </div>
         )}
 
-        <ul className="space-y-0.5">
-          {filteredPages.map((page) => (
-            <li
-              key={page.id}
-              onClick={() => handleNavigate(page.id)}
-              className={`group flex items-center justify-between p-2 rounded-md cursor-pointer transition-all duration-200 ${
-                selectedPageId === page.id
-                  ? "bg-[#79B791]/30 text-[#EDF4ED]"
-                  : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
-              }`}
-            >
-              <span className="truncate text-sm">{page.title}</span>
-              <div className="flex items-center space-x-1">
-                <button
-                  onClick={(e) => handleDeletePage(e, page.id)}
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
-                  aria-label={`Delete ${page.title}`}
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-300" />
-                </button>
-                <button
-                  onClick={(e) => handleToggleFavorite(e, page.id)}
-                  className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
-                  aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <Star
-                    className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
-                  />
-                </button>
+        {/* Grid or List View based on viewMode */}
+        {viewMode === "list" ? (
+          <ul className="space-y-0.5">
+            {filteredPages.map((page) => (
+              <li
+                key={page.id}
+                onClick={() => handleNavigate(page.id)}
+                className={`group flex items-center justify-between p-2 rounded-md cursor-pointer transition-all duration-200 ${
+                  selectedPageId === page.id
+                    ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                    : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
+                }`}
+              >
+                <span className="truncate text-sm">{page.title}</span>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={(e) => handleDeletePage(e, page.id)}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
+                    aria-label={`Delete ${page.title}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-300" />
+                  </button>
+                  <button
+                    onClick={(e) => handleToggleFavorite(e, page.id)}
+                    className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
+                    aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Star
+                      className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
+                    />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {filteredPages.map((page) => (
+              <div
+                key={page.id}
+                onClick={() => handleNavigate(page.id)}
+                className={`group flex flex-col p-3 rounded-md cursor-pointer transition-all duration-200 h-24 relative ${
+                  selectedPageId === page.id
+                    ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                    : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
+                }`}
+              >
+                <div className="flex justify-between items-start">
+                  <h3 className="text-sm font-medium truncate mb-1 pr-6">{page.title}</h3>
+                  <div className="absolute top-2 right-2 flex space-x-1">
+                    <button
+                      onClick={(e) => handleToggleFavorite(e, page.id)}
+                      className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
+                      aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    >
+                      <Star
+                        className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
+                      />
+                    </button>
+                  </div>
+                </div>
+                <p className="text-xs text-[#EDF4ED]/60 line-clamp-2 flex-grow">
+                  {page.content ? page.content.substring(0, 60) + "..." : "No content"}
+                </p>
+                <div className="mt-auto flex justify-between items-center">
+                  <span className="text-xs text-[#EDF4ED]/40">
+                    {page.tags && page.tags.length > 0 ? page.tags[0] : "No tags"}
+                  </span>
+                  <button
+                    onClick={(e) => handleDeletePage(e, page.id)}
+                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
+                    aria-label={`Delete ${page.title}`}
+                  >
+                    <Trash2 className="h-3 w-3 text-red-400 hover:text-red-300" />
+                  </button>
+                </div>
               </div>
-            </li>
-          ))}
-        </ul>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-[#79B791]/20">
