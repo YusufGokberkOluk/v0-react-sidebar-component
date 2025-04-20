@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect } from "react"
 import { Search, Filter, Plus, ArrowRight, Star, Sparkles, Grid, List, ChevronDown, Check } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
@@ -25,6 +27,8 @@ export default function TemplatesView() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [selectedCategory, setSelectedCategory] = useState<string>("All")
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false)
+  const [favorites, setFavorites] = useState<string[]>([])
+  const [isInitialized, setIsInitialized] = useState(false)
 
   // Sample template data with more templates
   const templates: Template[] = [
@@ -94,7 +98,7 @@ export default function TemplatesView() {
       description: "Weekly planning template with goals, priorities, and reflection sections.",
       category: "productivity",
       tags: ["planning", "weekly", "productivity"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=weekly%20planner",
+      thumbnail: "/colorful-weekly-spread.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -106,7 +110,7 @@ export default function TemplatesView() {
       description: "AI-powered template that helps create structured content outlines for articles and essays.",
       category: "writing",
       tags: ["writing", "ai", "content"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=content%20outline",
+      thumbnail: "/project-roadmap.png",
       isFeatured: true,
       isAIPowered: true,
       isCustom: false,
@@ -118,7 +122,7 @@ export default function TemplatesView() {
       description: "Custom template for tracking daily work activities and accomplishments.",
       category: "work",
       tags: ["work", "tracking", "custom"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=work%20log",
+      thumbnail: "/digital-work-log.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: true,
@@ -131,7 +135,7 @@ export default function TemplatesView() {
       description: "Organize your favorite recipes with ingredients, instructions, and photos.",
       category: "personal",
       tags: ["cooking", "recipes", "food"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=recipe%20book",
+      thumbnail: "/open-recipe-book.png",
       isFeatured: false,
       isAIPowered: false,
       isCustom: false,
@@ -143,7 +147,7 @@ export default function TemplatesView() {
       description: "Plan your trips with itineraries, packing lists, and budget tracking.",
       category: "personal",
       tags: ["travel", "planning", "vacation"],
-      thumbnail: "/placeholder.svg?height=200&width=300&query=travel%20planner",
+      thumbnail: "/world-map-adventure.png",
       isFeatured: true,
       isAIPowered: false,
       isCustom: false,
@@ -223,10 +227,32 @@ export default function TemplatesView() {
     },
   ]
 
+  // Load favorites from localStorage on component mount
+  useEffect(() => {
+    const storedFavorites = localStorage.getItem("templateFavorites")
+    if (storedFavorites) {
+      try {
+        setFavorites(JSON.parse(storedFavorites))
+      } catch (e) {
+        console.error("Error parsing favorites from localStorage:", e)
+        setFavorites([])
+      }
+    }
+    setIsInitialized(true)
+  }, [])
+
+  // Save favorites to localStorage whenever they change
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("templateFavorites", JSON.stringify(favorites))
+    }
+  }, [favorites, isInitialized])
+
   // Categories
   const categories = [
     { id: "all", name: "All Templates" },
     { id: "featured", name: "Featured" },
+    { id: "favorites", name: "Favorites" },
     { id: "work", name: "Work" },
     { id: "personal", name: "Personal" },
     { id: "academic", name: "Academic" },
@@ -235,6 +261,25 @@ export default function TemplatesView() {
     { id: "health", name: "Health" },
     { id: "custom", name: "My Templates" },
   ]
+
+  // Toggle favorite status for a template
+  const toggleFavorite = (templateId: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    setFavorites((prevFavorites) => {
+      if (prevFavorites.includes(templateId)) {
+        return prevFavorites.filter((id) => id !== templateId)
+      } else {
+        return [...prevFavorites, templateId]
+      }
+    })
+  }
+
+  // Check if a template is favorited
+  const isFavorite = (templateId: string) => {
+    return favorites.includes(templateId)
+  }
 
   // Filter templates based on search query and active category
   const filteredTemplates = templates.filter((template) => {
@@ -246,13 +291,15 @@ export default function TemplatesView() {
     const matchesCategory =
       activeCategory === "all" ||
       (activeCategory === "featured" && template.isFeatured) ||
+      (activeCategory === "favorites" && isFavorite(template.id)) ||
       (activeCategory === "custom" && template.isCustom) ||
       template.category === activeCategory
 
     return matchesSearch && matchesCategory
   })
 
-  const handlePreview = (template: Template) => {
+  const handlePreview = (template: Template, e: React.MouseEvent) => {
+    e.preventDefault()
     console.log("Preview template:", template.id)
   }
 
@@ -324,6 +371,11 @@ export default function TemplatesView() {
                       >
                         {category.id === activeCategory && <Check className="h-4 w-4 mr-2 text-[#79B791]" />}
                         <span className={category.id === activeCategory ? "font-medium" : ""}>{category.name}</span>
+                        {category.id === "favorites" && favorites.length > 0 && (
+                          <span className="ml-auto bg-[#79B791]/10 text-[#79B791] text-xs px-2 py-0.5 rounded-full">
+                            {favorites.length}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -371,10 +423,102 @@ export default function TemplatesView() {
                 }`}
               >
                 {category.name}
+                {category.id === "favorites" && favorites.length > 0 && (
+                  <span className="ml-2 bg-white text-[#79B791] text-xs px-2 py-0.5 rounded-full">
+                    {favorites.length}
+                  </span>
+                )}
               </button>
             ))}
           </div>
         </div>
+
+        {/* Favorites Section (when selected) */}
+        {activeCategory === "favorites" && favorites.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-lg font-medium text-[#13262F] mb-4">Your Favorite Templates</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+              {templates
+                .filter((template) => favorites.includes(template.id))
+                .map((template, index) => (
+                  <div
+                    key={template.id}
+                    className="bg-white rounded-lg shadow-sm border border-[#ABD1B5]/10 overflow-hidden hover:shadow-md transition-shadow"
+                  >
+                    <div className="relative h-40 bg-[#EDF4ED]">
+                      <Image
+                        src={template.thumbnail || "/placeholder.svg"}
+                        alt={template.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        priority={index < 4}
+                      />
+                      {template.isAIPowered && (
+                        <div className="absolute top-2 right-2 bg-[#79B791]/90 text-white text-xs px-2 py-1 rounded-full flex items-center z-10">
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          AI-Powered
+                        </div>
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-medium text-[#13262F]">{template.title}</h3>
+                        <button
+                          onClick={(e) => toggleFavorite(template.id, e)}
+                          className="text-[#79B791] hover:text-[#ABD1B5] transition-colors"
+                          aria-label={isFavorite(template.id) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star className={`h-4 w-4 ${isFavorite(template.id) ? "fill-[#79B791]" : ""}`} />
+                        </button>
+                      </div>
+                      <p className="text-[#13262F]/60 text-sm mt-1 line-clamp-2">{template.description}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {template.tags.slice(0, 3).map((tag) => (
+                          <span key={tag} className="text-xs bg-[#EDF4ED] text-[#13262F]/70 px-2 py-0.5 rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex justify-between items-center mt-4">
+                        <button
+                          onClick={(e) => handlePreview(template, e)}
+                          className="text-[#79B791] text-sm font-medium hover:text-[#ABD1B5] transition-colors"
+                        >
+                          Preview
+                        </button>
+                        <Link
+                          href={`/app/new?template=${template.id}`}
+                          className="flex items-center text-[#13262F] text-sm font-medium hover:text-[#79B791] transition-colors"
+                        >
+                          Use Template
+                          <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty Favorites State */}
+        {activeCategory === "favorites" && favorites.length === 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-[#ABD1B5]/10 p-8 text-center mb-8">
+            <Star className="h-12 w-12 text-[#ABD1B5]/40 mx-auto mb-3" />
+            <h3 className="text-lg font-medium text-[#13262F] mb-2">No favorites yet</h3>
+            <p className="text-[#13262F]/60 max-w-md mx-auto mb-4">
+              Add templates to your favorites by clicking the star icon. Your favorite templates will appear here for
+              quick access.
+            </p>
+            <button
+              onClick={() => selectCategory("all")}
+              className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#ABD1B5] transition-colors"
+            >
+              Browse Templates
+            </button>
+          </div>
+        )}
 
         {/* Featured Templates */}
         {activeCategory === "all" && (
@@ -406,7 +550,16 @@ export default function TemplatesView() {
                       )}
                     </div>
                     <div className="p-4">
-                      <h3 className="font-medium text-[#13262F]">{template.title}</h3>
+                      <div className="flex justify-between items-start">
+                        <h3 className="font-medium text-[#13262F]">{template.title}</h3>
+                        <button
+                          onClick={(e) => toggleFavorite(template.id, e)}
+                          className={`transition-colors ${isFavorite(template.id) ? "text-[#79B791]" : "text-[#13262F]/40 hover:text-[#79B791]"}`}
+                          aria-label={isFavorite(template.id) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star className={`h-4 w-4 ${isFavorite(template.id) ? "fill-[#79B791]" : ""}`} />
+                        </button>
+                      </div>
                       <p className="text-[#13262F]/60 text-sm mt-1 line-clamp-2">{template.description}</p>
                       <div className="flex flex-wrap gap-1 mt-2">
                         {template.tags.slice(0, 3).map((tag) => (
@@ -417,7 +570,7 @@ export default function TemplatesView() {
                       </div>
                       <div className="flex justify-between items-center mt-4">
                         <button
-                          onClick={() => handlePreview(template)}
+                          onClick={(e) => handlePreview(template, e)}
                           className="text-[#79B791] text-sm font-medium hover:text-[#ABD1B5] transition-colors"
                         >
                           Preview
@@ -477,8 +630,12 @@ export default function TemplatesView() {
                   <div className="p-4">
                     <div className="flex justify-between items-start">
                       <h3 className="font-medium text-[#13262F]">{template.title}</h3>
-                      <button className="text-[#13262F]/40 hover:text-[#79B791]">
-                        <Star className="h-4 w-4" />
+                      <button
+                        onClick={(e) => toggleFavorite(template.id, e)}
+                        className={`transition-colors ${isFavorite(template.id) ? "text-[#79B791]" : "text-[#13262F]/40 hover:text-[#79B791]"}`}
+                        aria-label={isFavorite(template.id) ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Star className={`h-4 w-4 ${isFavorite(template.id) ? "fill-[#79B791]" : ""}`} />
                       </button>
                     </div>
                     <p className="text-[#13262F]/60 text-sm mt-1 line-clamp-2">{template.description}</p>
@@ -496,7 +653,7 @@ export default function TemplatesView() {
                     </div>
                     <div className="flex justify-between items-center mt-4">
                       <button
-                        onClick={() => handlePreview(template)}
+                        onClick={(e) => handlePreview(template, e)}
                         className="text-[#79B791] text-sm font-medium hover:text-[#ABD1B5] transition-colors"
                       >
                         Preview
@@ -544,8 +701,12 @@ export default function TemplatesView() {
                     <div className="p-4 flex-1">
                       <div className="flex justify-between items-start">
                         <h3 className="font-medium text-[#13262F]">{template.title}</h3>
-                        <button className="text-[#13262F]/40 hover:text-[#79B791]">
-                          <Star className="h-4 w-4" />
+                        <button
+                          onClick={(e) => toggleFavorite(template.id, e)}
+                          className={`transition-colors ${isFavorite(template.id) ? "text-[#79B791]" : "text-[#13262F]/40 hover:text-[#79B791]"}`}
+                          aria-label={isFavorite(template.id) ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star className={`h-4 w-4 ${isFavorite(template.id) ? "fill-[#79B791]" : ""}`} />
                         </button>
                       </div>
                       <p className="text-[#13262F]/60 text-sm mt-1">{template.description}</p>
@@ -559,7 +720,7 @@ export default function TemplatesView() {
                       <div className="flex justify-between items-center mt-4">
                         <div className="flex items-center space-x-4">
                           <button
-                            onClick={() => handlePreview(template)}
+                            onClick={(e) => handlePreview(template, e)}
                             className="text-[#79B791] text-sm font-medium hover:text-[#ABD1B5] transition-colors"
                           >
                             Preview
