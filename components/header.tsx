@@ -5,24 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import {
-  ChevronDown,
-  Settings,
-  LogOut,
-  Search,
-  Bell,
-  Sparkles,
-  HelpCircle,
-  Menu,
-  MessageSquare,
-  FileText,
-  Users,
-  Clock,
-  X,
-  Check,
-  ExternalLink,
-  AlertCircle,
-} from "lucide-react"
+import { ChevronDown, Settings, LogOut, Search, Bell, Sparkles, HelpCircle, Menu, MessageSquare, FileText, Users, Clock, X, Check, ExternalLink, AlertCircle } from 'lucide-react'
 import AiActionsPopup from "./ai-actions-popup"
 
 // Sample notification data
