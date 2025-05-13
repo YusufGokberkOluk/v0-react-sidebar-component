@@ -14,6 +14,17 @@ export interface User {
 
 // Derleme sırasında çalışmayı önlemek için yardımcı fonksiyon
 async function getCollection(collectionName: string) {
+  // Derleme sırasında çalışmayı önlemek için kontrol
+  if (process.env.NEXT_PHASE === "phase-production-build") {
+    console.log(`Skipping database access to ${collectionName} during build`)
+    return {
+      findOne: () => Promise.resolve(null),
+      insertOne: () => Promise.resolve({ insertedId: new ObjectId() }),
+      updateOne: () => Promise.resolve({ modifiedCount: 1 }),
+      deleteOne: () => Promise.resolve({ deletedCount: 1 }),
+    }
+  }
+
   try {
     const client = await clientPromise
     const db = client.db()

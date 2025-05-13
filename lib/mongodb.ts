@@ -1,40 +1,47 @@
 import { MongoClient } from "mongodb"
 
-// Derleme sırasında çalışmayı önlemek için kontrol
+// MongoDB URI'yi kontrol et
 const MONGODB_URI = process.env.MONGODB_URI
 
-if (!MONGODB_URI && process.env.NODE_ENV !== "production") {
-  console.warn("MongoDB URI bulunamadı. Lütfen .env dosyanızı kontrol edin.")
-}
-
-// Derleme sırasında çalışmayı önlemek için global değişken
+// Global değişken tanımı
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined
 }
 
-let client: MongoClient
+// Derleme sırasında çalışmayı önlemek için
+if (!MONGODB_URI) {
+  throw new Error("Please define the MONGODB_URI environment variable")
+}
+
+// Bağlantı fonksiyonu
+async function createMongoClient() {
+  // Eğer derleme sırasında çalışıyorsa, boş bir promise döndür
+  if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE === "phase-production-build") {
+    console.log("Skipping MongoDB connection during build")
+    return Promise.resolve({} as MongoClient)
+  }
+
+  try {
+    const client = new MongoClient(MONGODB_URI)
+    return client.connect()
+  } catch (error) {
+    console.error("MongoDB connection error:", error)
+    throw error
+  }
+}
+
+// Client promise'i oluştur
 let clientPromise: Promise<MongoClient>
 
-// Derleme sırasında çalışmayı önlemek için kontrol
 if (process.env.NODE_ENV === "development") {
-  // Development modunda global değişken kullan
+  // Development modunda global değişkeni kullan
   if (!global._mongoClientPromise) {
-    client = new MongoClient(MONGODB_URI || "")
-    global._mongoClientPromise = client.connect().catch((err) => {
-      console.error("MongoDB bağlantı hatası:", err)
-      // Boş bir promise döndür, ama asla reject etme
-      return new Promise<MongoClient>(() => {})
-    })
+    global._mongoClientPromise = createMongoClient()
   }
   clientPromise = global._mongoClientPromise
 } else {
   // Production modunda
-  client = new MongoClient(MONGODB_URI || "")
-  clientPromise = client.connect().catch((err) => {
-    console.error("MongoDB bağlantı hatası:", err)
-    // Boş bir promise döndür, ama asla reject etme
-    return new Promise<MongoClient>(() => {})
-  })
+  clientPromise = createMongoClient()
 }
 
 export default clientPromise

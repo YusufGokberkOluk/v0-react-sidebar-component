@@ -9,11 +9,12 @@ const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
 export async function POST(req: NextRequest) {
   try {
     // Derleme sırasında çalışmayı önlemek için kontrol
-    if (process.env.NODE_ENV === "development" && process.env.VERCEL_ENV === "preview") {
-      return NextResponse.json(
-        { success: false, message: "Derleme sırasında API çağrıları devre dışı" },
-        { status: 503 },
-      )
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      console.log("Skipping API execution during build")
+      return new Response(JSON.stringify({ message: "Build time, skipping execution" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
     }
 
     const { email, password } = await req.json()
