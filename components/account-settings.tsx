@@ -81,15 +81,37 @@ export default function AccountSettings() {
     setShowConfirmation(false)
   }
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     console.log("Account deletion confirmed")
     setShowConfirmation(false)
-    // Kullanıcı bilgilerini temizle
-    localStorage.removeItem("isLoggedIn")
-    localStorage.removeItem("userEmail")
-    localStorage.removeItem("userName")
-    // Ana sayfaya yönlendir
-    window.location.href = "/"
+
+    try {
+      // API'ye DELETE isteği gönder
+      const response = await fetch("/api/user", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Başarılı olduğunda localStorage'ı temizle
+        localStorage.removeItem("isLoggedIn")
+        localStorage.removeItem("userEmail")
+        localStorage.removeItem("userName")
+
+        // Kullanıcıya bilgi ver ve ana sayfaya yönlendir
+        alert("Hesabınız başarıyla silindi.")
+        window.location.href = "/"
+      } else {
+        alert("Hesap silinirken bir hata oluştu: " + (data.message || "Bilinmeyen hata"))
+      }
+    } catch (error) {
+      console.error("Hesap silme hatası:", error)
+      alert("Hesabınız silinirken bir hata oluştu. Lütfen tekrar deneyin.")
+    }
   }
 
   const handleSaveChanges = async () => {
