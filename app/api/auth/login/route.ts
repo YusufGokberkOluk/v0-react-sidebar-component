@@ -3,8 +3,8 @@ import { loginUser } from "@/lib/db"
 import { cookies } from "next/headers"
 import { sign } from "jsonwebtoken"
 
-// JWT için gizli anahtar (gerçek uygulamada env değişkeni olarak saklanmalı)
-const JWT_SECRET = "etude-app-secret-key"
+// JWT için gizli anahtar
+const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
 
 export async function POST(req: NextRequest) {
   try {

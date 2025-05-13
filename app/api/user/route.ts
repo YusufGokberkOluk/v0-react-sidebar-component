@@ -4,7 +4,7 @@ import { cookies } from "next/headers"
 import { verify } from "jsonwebtoken"
 
 // JWT için gizli anahtar (gerçek uygulamada env değişkeni olarak saklanmalı)
-const JWT_SECRET = "etude-app-secret-key"
+const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
 
 // Kullanıcı kimliğini doğrulama middleware
 async function authenticateUser(req: NextRequest) {
