@@ -11,33 +11,66 @@ export default function AccountSettings() {
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [reminderNotifications, setReminderNotifications] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [originalName, setOriginalName] = useState("")
+  const [originalEmail, setOriginalEmail] = useState("")
 
-  // Kullanıcı bilgilerini localStorage'dan yükle
+  // Kullanıcı bilgilerini API'den yükle
   useEffect(() => {
-    const storedName = localStorage.getItem("userName") || ""
-    const storedEmail = localStorage.getItem("userEmail") || ""
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch("/api/user")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.user) {
+            // API'den gelen kullanıcı bilgilerini state'e ayarla
+            setName(data.user.name || "")
+            setEmail(data.user.email || "")
 
-    setName(storedName)
-    setEmail(storedEmail)
-
-    // Eğer isim yoksa ve email varsa, email'den kullanıcı adı oluştur
-    if (!storedName && storedEmail) {
-      const username = storedEmail.split("@")[0]
-      setName(username.charAt(0).toUpperCase() + username.slice(1))
+            // Eğer isim yoksa ve email varsa, email'den kullanıcı adı oluştur
+            if (!data.user.name && data.user.email) {
+              const username = data.user.email.split("@")[0]
+              setName(username.charAt(0).toUpperCase() + username.slice(1))
+            }
+          }
+        } else {
+          console.error("Kullanıcı bilgileri alınamadı")
+        }
+      } catch (error) {
+        console.error("Kullanıcı bilgileri yüklenirken hata:", error)
+      }
     }
+
+    fetchUserData()
+  }, [])
+
+  // Orijinal değerleri yükle
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const response = await fetch("/api/user")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.user) {
+            setOriginalName(data.user.name || "")
+            setOriginalEmail(data.user.email || "")
+          }
+        }
+      } catch (error) {
+        console.error("Orijinal kullanıcı bilgileri yüklenirken hata:", error)
+      }
+    }
+
+    fetchUserData()
   }, [])
 
   // Değişiklikleri izle
   useEffect(() => {
-    const storedName = localStorage.getItem("userName") || ""
-    const storedEmail = localStorage.getItem("userEmail") || ""
-
-    if (name !== storedName || email !== storedEmail) {
+    if (name !== originalName || email !== originalEmail) {
       setHasUnsavedChanges(true)
     } else {
       setHasUnsavedChanges(false)
     }
-  }, [name, email])
+  }, [name, email, originalName, originalEmail])
 
   const handleDeleteRequest = () => {
     console.log("Request delete account confirmation")
@@ -59,14 +92,35 @@ export default function AccountSettings() {
     window.location.href = "/"
   }
 
-  const handleSaveChanges = () => {
-    // Değişiklikleri localStorage'a kaydet
-    localStorage.setItem("userName", name)
-    localStorage.setItem("userEmail", email)
-    setHasUnsavedChanges(false)
+  const handleSaveChanges = async () => {
+    try {
+      // Değişiklikleri API'ye gönder
+      const response = await fetch("/api/user", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name,
+          // Email değişikliği için ayrı bir endpoint kullanılabilir
+          // Bu örnekte email değişikliği yapmıyoruz
+        }),
+      })
 
-    // Başarılı mesajı göster
-    alert("Profil bilgileriniz başarıyla güncellendi!")
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        // Başarılı olduğunda orijinal değerleri güncelle
+        setOriginalName(name)
+        setHasUnsavedChanges(false)
+        alert("Profil bilgileriniz başarıyla güncellendi!")
+      } else {
+        alert("Profil bilgileriniz güncellenirken bir hata oluştu: " + (data.message || "Bilinmeyen hata"))
+      }
+    } catch (error) {
+      console.error("Profil güncelleme hatası:", error)
+      alert("Profil bilgileriniz güncellenirken bir hata oluştu. Lütfen tekrar deneyin.")
+    }
   }
 
   return (
