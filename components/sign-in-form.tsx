@@ -5,11 +5,6 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
-const mockUser = {
-  email: "kullanici@etude.app",
-  password: "password123",
-}
-
 export default function SignInForm() {
   const router = useRouter()
   const [email, setEmail] = useState("")
@@ -19,41 +14,58 @@ export default function SignInForm() {
 
   // Check if user is already logged in
   useEffect(() => {
-    // In a real app, this would check for auth tokens/cookies
-    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true"
-    if (isLoggedIn) {
-      router.push("/app")
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/user")
+        if (res.ok) {
+          router.push("/app")
+        }
+      } catch (error) {
+        console.error("Auth check error:", error)
+      }
     }
+
+    checkAuth()
   }, [router])
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     console.log("Sign in attempt", { email, password })
 
-    // Kayıtlı kullanıcı e-postasını localStorage'dan al
-    const registeredEmail = localStorage.getItem("userEmail")
+    setError("")
 
-    // Giriş başarılı olacak durumlar:
-    // 1. Sabit test kullanıcısı ile eşleşme
-    // 2. VEYA kayıt sırasında kaydedilen e-posta ile eşleşme (demo için şifre kontrolü yapmıyoruz)
-    if (
-      (email === mockUser.email && password === mockUser.password) ||
-      (registeredEmail && email === registeredEmail)
-    ) {
-      console.log("Login successful! (Mock)")
-      setError("")
+    if (!email || !password) {
+      setError("E-posta ve şifre gereklidir.")
+      return
+    }
+
+    try {
       setIsRedirecting(true)
 
-      // Set mock login state
-      localStorage.setItem("isLoggedIn", "true")
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-      // Use Next.js router for navigation
-      setTimeout(() => {
+      const data = await response.json()
+
+      if (response.ok && data.success) {
+        console.log("Login successful!")
+
+        // Redirect to app
         router.push("/app")
-      }, 1500)
-    } else {
-      console.log("Login failed! Email or password incorrect. (Mock)")
-      setError("Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.")
+      } else {
+        console.log("Login failed:", data.message)
+        setError(data.message || "Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.")
+        setIsRedirecting(false)
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      setError("Giriş sırasında bir hata oluştu. Lütfen tekrar deneyin.")
+      setIsRedirecting(false)
     }
   }
 
@@ -124,31 +136,39 @@ export default function SignInForm() {
           <div>
             <button
               type="submit"
-              className="w-full px-4 py-2.5 text-white bg-[#79B791] rounded-md hover:bg-[#ABD1B5] focus:outline-none focus:ring-2 focus:ring-[#79B791] focus:ring-offset-2 transition-colors duration-200 text-sm font-medium"
+              disabled={isRedirecting}
+              className="w-full px-4 py-2.5 text-white bg-[#79B791] rounded-md hover:bg-[#ABD1B5] focus:outline-none focus:ring-2 focus:ring-[#79B791] focus:ring-offset-2 transition-colors duration-200 text-sm font-medium disabled:opacity-70"
             >
-              Sign In
+              {isRedirecting ? (
+                <span className="flex items-center justify-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Logging in...
+                </span>
+              ) : (
+                "Sign In"
+              )}
             </button>
           </div>
           {error && <div className="mt-2 text-red-500 text-xs text-center">{error}</div>}
-
-          {isRedirecting && (
-            <div className="mt-2 text-[#79B791] text-xs flex items-center justify-center">
-              <svg
-                className="animate-spin -ml-1 mr-2 h-3 w-3 text-[#79B791]"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                ></path>
-              </svg>
-              Logging in...
-            </div>
-          )}
         </form>
 
         <div className="text-center mt-4">

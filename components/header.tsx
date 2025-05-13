@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   ChevronDown,
   Settings,
@@ -35,6 +35,13 @@ interface Notification {
   link?: string
 }
 
+// User interface
+interface User {
+  id: string
+  name?: string
+  email: string
+}
+
 // Add these props to the Header component
 interface HeaderProps {
   toggleTheme?: () => void
@@ -43,6 +50,7 @@ interface HeaderProps {
 
 export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
   const pathname = usePathname()
+  const router = useRouter()
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isAiActionsOpen, setIsAiActionsOpen] = useState(false)
@@ -57,8 +65,28 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
-  const [userEmail, setUserEmail] = useState("")
-  const [userName, setUserName] = useState("John Doe") // Varsayılan değer
+  const [user, setUser] = useState<User | null>(null)
+
+  // Fetch user data
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (isLoggedIn) {
+        try {
+          const res = await fetch("/api/user")
+          if (res.ok) {
+            const data = await res.json()
+            if (data.success && data.user) {
+              setUser(data.user)
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching user data:", error)
+        }
+      }
+    }
+
+    fetchUserData()
+  }, [isLoggedIn])
 
   // Sample notifications data
   useEffect(() => {
@@ -169,28 +197,6 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
     setIsLoggedIn(isInAuthenticatedArea)
   }, [pathname])
 
-  // Kullanıcı bilgilerini localStorage'dan al
-  useEffect(() => {
-    if (isLoggedIn) {
-      const storedEmail = localStorage.getItem("userEmail")
-      const storedName = localStorage.getItem("userName")
-
-      if (storedEmail) {
-        setUserEmail(storedEmail)
-      }
-
-      if (storedName) {
-        setUserName(storedName)
-      } else {
-        // Eğer isim yoksa, e-postadan kullanıcı adını çıkar
-        if (storedEmail) {
-          const username = storedEmail.split("@")[0]
-          setUserName(username.charAt(0).toUpperCase() + username.slice(1))
-        }
-      }
-    }
-  }, [isLoggedIn])
-
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
   }
@@ -204,14 +210,22 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
   }
 
   // Update the handleSignOut function
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     console.log("Sign out initiated")
-    // Clear the login state
-    localStorage.removeItem("isLoggedIn")
-    // Close the menu
-    setIsMenuOpen(false)
-    // Redirect to home page
-    window.location.href = "/"
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      // Close the menu
+      setIsMenuOpen(false)
+
+      // Redirect to home page
+      router.push("/")
+    } catch (error) {
+      console.error("Logout error:", error)
+    }
   }
 
   const toggleNotifications = () => {
@@ -280,6 +294,27 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
       default:
         return <Bell className="h-4 w-4 text-[#79B791]" />
     }
+  }
+
+  // Get user's first name or first initial
+  const getUserInitial = () => {
+    if (user?.name) {
+      return user.name.charAt(0)
+    } else if (user?.email) {
+      return user.email.charAt(0).toUpperCase()
+    }
+    return "U"
+  }
+
+  // Get user's display name
+  const getUserDisplayName = () => {
+    if (user?.name) {
+      return user.name
+    } else if (user?.email) {
+      const username = user.email.split("@")[0]
+      return username.charAt(0).toUpperCase() + username.slice(1)
+    }
+    return "User"
   }
 
   return (
@@ -534,9 +569,9 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
                   tabIndex={0}
                 >
                   <div className="w-6 h-6 rounded-full bg-[#79B791] flex items-center justify-center text-white text-xs font-medium">
-                    {userName ? userName.charAt(0) : "J"}
+                    {getUserInitial()}
                   </div>
-                  <span className="text-sm hidden sm:inline">{userName}</span>
+                  <span className="text-sm hidden sm:inline">{getUserDisplayName()}</span>
                   <ChevronDown
                     className={`h-4 w-4 text-[#EDF4ED]/70 transition-transform ${isMenuOpen ? "rotate-180" : ""}`}
                   />
@@ -545,8 +580,8 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
                 {isMenuOpen && (
                   <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-[#ABD1B5]/20">
                     <div className="px-4 py-2 border-b border-[#ABD1B5]/20">
-                      <p className="text-sm font-medium text-[#13262F]">{userName}</p>
-                      <p className="text-xs text-[#13262F]/60">{userEmail || "kullanici@etude.app"}</p>
+                      <p className="text-sm font-medium text-[#13262F]">{getUserDisplayName()}</p>
+                      <p className="text-xs text-[#13262F]/60">{user?.email || "user@example.com"}</p>
                     </div>
                     <Link
                       href="/settings"
@@ -593,15 +628,14 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
           <div className="fixed inset-y-0 left-0 w-64 bg-[#13262F] border-r border-[#79B791]/20 overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-[#79B791]/20">
               <div className="flex items-center">
-                <div className="mr-1 text-[#79B791] font-semibold relative">
+                <div className="text-[#79B791] font-semibold text-xl relative">
                   <span className="inline-block rounded-full bg-[#79B791] text-white px-2 py-0.5">é</span>
+                  <span className="text-white ml-1">tude</span>
                 </div>
-                <span className="text-white">étude</span>
               </div>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-1.5 rounded-md hover:bg-[#79B791]/10 text-[#EDF4ED]/70"
-                aria-label="Close menu"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -609,7 +643,7 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
             <nav className="p-4 space-y-1">
               <Link
                 href="/app"
-                className={`flex items-center px-3 py-2 rounded-md transition-colors ${
+                className={`flex items-center px-3 py-2 rounded-md ${
                   pathname?.startsWith("/app")
                     ? "bg-[#79B791]/20 text-white"
                     : "text-[#EDF4ED]/80 hover:bg-[#79B791]/10 hover:text-white"
@@ -620,7 +654,7 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
               </Link>
               <Link
                 href="/templates"
-                className={`flex items-center px-3 py-2 rounded-md transition-colors ${
+                className={`flex items-center px-3 py-2 rounded-md ${
                   pathname?.startsWith("/templates")
                     ? "bg-[#79B791]/20 text-white"
                     : "text-[#EDF4ED]/80 hover:bg-[#79B791]/10 hover:text-white"
@@ -629,6 +663,25 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
               >
                 Templates
               </Link>
+              <Link
+                href="/settings"
+                className={`flex items-center px-3 py-2 rounded-md ${
+                  pathname?.startsWith("/settings")
+                    ? "bg-[#79B791]/20 text-white"
+                    : "text-[#EDF4ED]/80 hover:bg-[#79B791]/10 hover:text-white"
+                }`}
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </Link>
+              <button
+                onClick={handleSignOut}
+                className="flex items-center w-full text-left px-3 py-2 text-[#EDF4ED]/80 hover:bg-[#79B791]/10 hover:text-white rounded-md"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </button>
             </nav>
           </div>
         </div>

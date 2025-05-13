@@ -10,18 +10,26 @@ export default function SignUpForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-  const [name, setName] = useState("") // İsim alanı için state ekleyelim
+  const [name, setName] = useState("")
   const [passwordError, setPasswordError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [formError, setFormError] = useState("")
-  const [formSuccess, setFormSuccess] = useState("") // Başarı mesajı için state
+  const [formSuccess, setFormSuccess] = useState("")
 
-  // Giriş yapmış kullanıcıyı yönlendirme (bu kısım aynı kalabilir)
+  // Giriş yapmış kullanıcıyı yönlendirme
   useEffect(() => {
-    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true"
-    if (isLoggedIn) {
-      router.push("/app")
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/user")
+        if (res.ok) {
+          router.push("/app")
+        }
+      } catch (error) {
+        console.error("Auth check error:", error)
+      }
     }
+
+    checkAuth()
   }, [router])
 
   const validatePasswords = () => {
@@ -54,26 +62,29 @@ export default function SignUpForm() {
     setIsSubmitting(true)
 
     try {
-      // Simulate API call with a timeout
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, email, password }),
+      })
 
-      // Mock successful signup
-      console.log("Sign up successful (mock):", { email, password, name })
-      setFormSuccess("Hesabınız başarıyla oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz...")
+      const data = await response.json()
 
-      // Store user info in localStorage for demo purposes
-      localStorage.setItem("userEmail", email)
-      if (name) {
-        localStorage.setItem("userName", name)
+      if (response.ok && data.success) {
+        setFormSuccess(data.message + " Giriş sayfasına yönlendiriliyorsunuz...")
+
+        // Redirect to sign-in page after a delay
+        setTimeout(() => {
+          router.push("/sign-in")
+        }, 2000)
+      } else {
+        setFormError(data.message || "Kayıt sırasında bir hata oluştu.")
       }
-
-      // Redirect to sign-in page after a delay
-      setTimeout(() => {
-        router.push("/sign-in")
-      }, 2000)
     } catch (error) {
       console.error("Signup error:", error)
-      setFormError("Kayıt sırasında bir hata oluştu.")
+      setFormError("Ağ hatası veya sunucuya ulaşılamıyor.")
     } finally {
       setIsSubmitting(false)
     }
@@ -83,7 +94,6 @@ export default function SignUpForm() {
     <div className="flex items-center justify-center min-h-screen bg-[#f8faf8]">
       <div className="w-full max-w-md p-8 space-y-6 bg-white rounded-lg shadow-sm border border-[#ABD1B5]/10">
         <div className="text-center">
-          {/* Logo vs. aynı kalabilir */}
           <div className="flex justify-center mb-2">
             <div className="text-[#79B791] font-semibold text-2xl relative">
               <span className="inline-block rounded-full bg-[#79B791] text-white px-2 py-0.5">é</span>
@@ -143,7 +153,6 @@ export default function SignUpForm() {
                 value={password}
                 onChange={(e) => {
                   setPassword(e.target.value)
-                  // Şifre alanını değiştirdiğinde hata mesajını temizleyebilir veya yeniden doğrulayabiliriz
                   if (passwordError && e.target.value.length >= 6 && e.target.value === confirmPassword) {
                     setPasswordError("")
                   }
@@ -171,7 +180,7 @@ export default function SignUpForm() {
                     setPasswordError("")
                   }
                 }}
-                onBlur={validatePasswords} // Odak dışı kaldığında doğrula
+                onBlur={validatePasswords}
                 className={`w-full px-3 py-2 text-[#13262F] bg-white border ${
                   passwordError ? "border-red-400" : "border-[#ABD1B5]/40"
                 } rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791] focus:border-[#79B791] text-sm`}
