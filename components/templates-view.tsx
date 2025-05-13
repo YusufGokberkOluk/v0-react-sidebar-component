@@ -6,7 +6,6 @@ import { useState, useEffect } from "react"
 import { Search, Filter, Plus, ArrowRight, Star, Sparkles, Grid, List, ChevronDown, Check } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
-import { useAppContext } from "@/context/app-context"
 
 // Template type definition
 interface Template {
@@ -22,21 +21,7 @@ interface Template {
   createdAt: string
 }
 
-const categories = [
-  { id: "all", name: "All Templates" },
-  { id: "featured", name: "Featured" },
-  { id: "work", name: "Work" },
-  { id: "personal", name: "Personal" },
-  { id: "academic", name: "Academic" },
-  { id: "productivity", name: "Productivity" },
-  { id: "writing", name: "Writing" },
-  { id: "health", name: "Health" },
-  { id: "custom", name: "Custom" },
-  { id: "favorites", name: "Favorites" },
-]
-
 export default function TemplatesView() {
-  const { favoriteTemplateIds, toggleTemplateFavorite } = useAppContext()
   const [searchQuery, setSearchQuery] = useState("")
   const [activeCategory, setActiveCategory] = useState("all")
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
@@ -257,24 +242,58 @@ export default function TemplatesView() {
     },
   ]
 
-  // Şablon görünümü bileşenini güncelleyin
-  // localStorage yerine API kullanacak şekilde değiştirin
+  // Load favorites from localStorage on component mount
+  useEffect(() => {
+    const storedFavorites = localStorage.getItem("templateFavorites")
+    if (storedFavorites) {
+      try {
+        setFavorites(JSON.parse(storedFavorites))
+      } catch (e) {
+        console.error("Error parsing favorites from localStorage:", e)
+        setFavorites([])
+      }
+    }
+    setIsInitialized(true)
+  }, [])
 
-  // Favori işlemleri için API çağrıları ekleyin
-  const toggleFavorite = async (templateId: string, e: React.MouseEvent) => {
+  // Save favorites to localStorage whenever they change
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("templateFavorites", JSON.stringify(favorites))
+    }
+  }, [favorites, isInitialized])
+
+  // Categories
+  const categories = [
+    { id: "all", name: "All Templates" },
+    { id: "featured", name: "Featured" },
+    { id: "favorites", name: "Favorites" },
+    { id: "work", name: "Work" },
+    { id: "personal", name: "Personal" },
+    { id: "academic", name: "Academic" },
+    { id: "productivity", name: "Productivity" },
+    { id: "writing", name: "Writing" },
+    { id: "health", name: "Health" },
+    { id: "custom", name: "My Templates" },
+  ]
+
+  // Toggle favorite status for a template
+  const toggleFavorite = (templateId: string, e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    try {
-      await toggleTemplateFavorite(templateId)
-    } catch (error) {
-      console.error("Favori işlemi hatası:", error)
-    }
+    setFavorites((prevFavorites) => {
+      if (prevFavorites.includes(templateId)) {
+        return prevFavorites.filter((id) => id !== templateId)
+      } else {
+        return [...prevFavorites, templateId]
+      }
+    })
   }
 
   // Check if a template is favorited
   const isFavorite = (templateId: string) => {
-    return favoriteTemplateIds.includes(templateId)
+    return favorites.includes(templateId)
   }
 
   // Filter templates based on search query and active category
@@ -352,26 +371,6 @@ export default function TemplatesView() {
         alert(`Copy this link: ${text}`)
       })
   }
-
-  // Favori şablonları yükle
-  useEffect(() => {
-    const fetchFavorites = async () => {
-      try {
-        const response = await fetch("/api/templates/favorites")
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            setFavorites(data.favorites)
-          }
-        }
-      } catch (error) {
-        console.error("Favoriler yüklenirken hata:", error)
-      }
-      setIsInitialized(true)
-    }
-
-    fetchFavorites()
-  }, [])
 
   return (
     <div className="min-h-screen bg-[#f8faf8] p-4 md:p-6">
