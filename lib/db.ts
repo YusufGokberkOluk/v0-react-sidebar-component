@@ -39,40 +39,51 @@ async function getCollection(collectionName: string) {
 export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
   try {
     // Derleme sırasında çalışmayı önlemek için kontrol
-    if (process.env.NODE_ENV === "development" && process.env.VERCEL_ENV === "preview") {
-      console.warn("Derleme sırasında veritabanı işlemleri devre dışı")
-      return null
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      console.log("Skipping database operation during build")
+      return {} as User
     }
 
     const collection = await getCollection("users")
 
     // E-posta adresinin zaten kullanımda olup olmadığını kontrol et
-    const existingUser = await collection.findOne({ email: userData.email })
-    if (existingUser) {
-      return null // E-posta zaten kullanımda
+    try {
+      const existingUser = await collection.findOne({ email: userData.email })
+      if (existingUser) {
+        console.log("Email already in use:", userData.email)
+        return null // E-posta zaten kullanımda
+      }
+    } catch (error) {
+      console.error("Error checking existing user:", error)
+      // Hata durumunda devam et, kullanıcı oluşturmayı dene
     }
 
     // Şifreyi hashle
     const hashedPassword = await bcrypt.hash(userData.password, 10)
 
     // Kullanıcıyı oluştur
-    const result = await collection.insertOne({
-      ...userData,
-      password: hashedPassword,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
+    try {
+      const result = await collection.insertOne({
+        ...userData,
+        password: hashedPassword,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
 
-    // Oluşturulan kullanıcıyı döndür (şifre hariç)
-    const newUser = await collection.findOne({ _id: result.insertedId })
-    if (!newUser) return null
+      // Oluşturulan kullanıcıyı döndür (şifre hariç)
+      const newUser = await collection.findOne({ _id: result.insertedId })
+      if (!newUser) return null
 
-    // Şifreyi çıkar ve kullanıcıyı döndür
-    const { password, ...userWithoutPassword } = newUser as User
-    return userWithoutPassword as User
+      // Şifreyi çıkar ve kullanıcıyı döndür
+      const { password, ...userWithoutPassword } = newUser as User
+      return userWithoutPassword as User
+    } catch (insertError) {
+      console.error("Error inserting new user:", insertError)
+      return null
+    }
   } catch (error) {
     console.error("Error creating user:", error)
-    throw error
+    return null // Hata durumunda null döndür
   }
 }
 

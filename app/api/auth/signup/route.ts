@@ -3,7 +3,17 @@ import { createUser } from "@/lib/db"
 
 export async function POST(req: NextRequest) {
   try {
+    // Derleme sırasında çalışmayı önlemek için kontrol
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      console.log("Skipping API execution during build")
+      return new Response(JSON.stringify({ message: "Build time, skipping execution" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
     const { name, email, password } = await req.json()
+    console.log("Signup attempt:", { name, email })
 
     // Basit doğrulama
     if (!email || !password) {
@@ -15,13 +25,20 @@ export async function POST(req: NextRequest) {
     }
 
     // Kullanıcı oluştur
-    const user = await createUser({ name, email, password })
+    try {
+      const user = await createUser({ name, email, password })
 
-    if (!user) {
-      return NextResponse.json({ success: false, message: "Bu e-posta adresi zaten kullanımda" }, { status: 409 })
+      if (!user) {
+        console.log("Failed to create user, email might be in use:", email)
+        return NextResponse.json({ success: false, message: "Bu e-posta adresi zaten kullanımda" }, { status: 409 })
+      }
+
+      console.log("User created successfully:", email)
+      return NextResponse.json({ success: true, message: "Hesabınız başarıyla oluşturuldu", user }, { status: 201 })
+    } catch (createError) {
+      console.error("Error during user creation:", createError)
+      return NextResponse.json({ success: false, message: "Kullanıcı oluşturulurken bir hata oluştu" }, { status: 500 })
     }
-
-    return NextResponse.json({ success: true, message: "Hesabınız başarıyla oluşturuldu", user }, { status: 201 })
   } catch (error) {
     console.error("Signup error:", error)
     return NextResponse.json({ success: false, message: "Kayıt sırasında bir hata oluştu" }, { status: 500 })
