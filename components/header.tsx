@@ -5,7 +5,24 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronDown, Settings, LogOut, Search, Bell, Sparkles, HelpCircle, Menu, MessageSquare, FileText, Users, Clock, X, Check, ExternalLink, AlertCircle } from 'lucide-react'
+import {
+  ChevronDown,
+  Settings,
+  LogOut,
+  Search,
+  Bell,
+  Sparkles,
+  HelpCircle,
+  Menu,
+  MessageSquare,
+  FileText,
+  Users,
+  Clock,
+  X,
+  Check,
+  ExternalLink,
+  AlertCircle,
+} from "lucide-react"
 import AiActionsPopup from "./ai-actions-popup"
 
 // Sample notification data
@@ -40,6 +57,8 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [userEmail, setUserEmail] = useState("")
+  const [userName, setUserName] = useState("John Doe") // Varsayılan değer
 
   // Sample notifications data
   useEffect(() => {
@@ -149,6 +168,28 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
     const isInAuthenticatedArea = loggedInPaths.some((path) => pathname?.startsWith(path))
     setIsLoggedIn(isInAuthenticatedArea)
   }, [pathname])
+
+  // Kullanıcı bilgilerini localStorage'dan al
+  useEffect(() => {
+    if (isLoggedIn) {
+      const storedEmail = localStorage.getItem("userEmail")
+      const storedName = localStorage.getItem("userName")
+
+      if (storedEmail) {
+        setUserEmail(storedEmail)
+      }
+
+      if (storedName) {
+        setUserName(storedName)
+      } else {
+        // Eğer isim yoksa, e-postadan kullanıcı adını çıkar
+        if (storedEmail) {
+          const username = storedEmail.split("@")[0]
+          setUserName(username.charAt(0).toUpperCase() + username.slice(1))
+        }
+      }
+    }
+  }, [isLoggedIn])
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen)
@@ -493,9 +534,9 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
                   tabIndex={0}
                 >
                   <div className="w-6 h-6 rounded-full bg-[#79B791] flex items-center justify-center text-white text-xs font-medium">
-                    J
+                    {userName ? userName.charAt(0) : "J"}
                   </div>
-                  <span className="text-sm hidden sm:inline">John Doe</span>
+                  <span className="text-sm hidden sm:inline">{userName}</span>
                   <ChevronDown
                     className={`h-4 w-4 text-[#EDF4ED]/70 transition-transform ${isMenuOpen ? "rotate-180" : ""}`}
                   />
@@ -504,8 +545,8 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
                 {isMenuOpen && (
                   <div className="absolute right-0 mt-1 w-48 bg-white rounded-md shadow-lg py-1 z-10 border border-[#ABD1B5]/20">
                     <div className="px-4 py-2 border-b border-[#ABD1B5]/20">
-                      <p className="text-sm font-medium text-[#13262F]">John Doe</p>
-                      <p className="text-xs text-[#13262F]/60">john.doe@example.com</p>
+                      <p className="text-sm font-medium text-[#13262F]">{userName}</p>
+                      <p className="text-xs text-[#13262F]/60">{userEmail || "kullanici@etude.app"}</p>
                     </div>
                     <Link
                       href="/settings"

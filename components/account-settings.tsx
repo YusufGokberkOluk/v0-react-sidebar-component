@@ -1,9 +1,43 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export default function AccountSettings() {
   const [showConfirmation, setShowConfirmation] = useState(false)
+  const [name, setName] = useState("")
+  const [email, setEmail] = useState("")
+  const [darkMode, setDarkMode] = useState(true)
+  const [autoSave, setAutoSave] = useState(true)
+  const [emailNotifications, setEmailNotifications] = useState(true)
+  const [reminderNotifications, setReminderNotifications] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+
+  // Kullanıcı bilgilerini localStorage'dan yükle
+  useEffect(() => {
+    const storedName = localStorage.getItem("userName") || ""
+    const storedEmail = localStorage.getItem("userEmail") || ""
+
+    setName(storedName)
+    setEmail(storedEmail)
+
+    // Eğer isim yoksa ve email varsa, email'den kullanıcı adı oluştur
+    if (!storedName && storedEmail) {
+      const username = storedEmail.split("@")[0]
+      setName(username.charAt(0).toUpperCase() + username.slice(1))
+    }
+  }, [])
+
+  // Değişiklikleri izle
+  useEffect(() => {
+    const storedName = localStorage.getItem("userName") || ""
+    const storedEmail = localStorage.getItem("userEmail") || ""
+
+    if (name !== storedName || email !== storedEmail) {
+      setHasUnsavedChanges(true)
+    } else {
+      setHasUnsavedChanges(false)
+    }
+  }, [name, email])
 
   const handleDeleteRequest = () => {
     console.log("Request delete account confirmation")
@@ -17,7 +51,22 @@ export default function AccountSettings() {
   const handleConfirmDelete = () => {
     console.log("Account deletion confirmed")
     setShowConfirmation(false)
-    // In a real app, this would call an API to delete the account
+    // Kullanıcı bilgilerini temizle
+    localStorage.removeItem("isLoggedIn")
+    localStorage.removeItem("userEmail")
+    localStorage.removeItem("userName")
+    // Ana sayfaya yönlendir
+    window.location.href = "/"
+  }
+
+  const handleSaveChanges = () => {
+    // Değişiklikleri localStorage'a kaydet
+    localStorage.setItem("userName", name)
+    localStorage.setItem("userEmail", email)
+    setHasUnsavedChanges(false)
+
+    // Başarılı mesajı göster
+    alert("Profil bilgileriniz başarıyla güncellendi!")
   }
 
   return (
@@ -36,7 +85,8 @@ export default function AccountSettings() {
               <input
                 type="text"
                 id="name"
-                defaultValue="John Doe"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full px-3 py-2 border border-[#ABD1B5] rounded-md focus:outline-none focus:ring-2 focus:ring-[#79B791]"
               />
             </div>
@@ -47,10 +97,21 @@ export default function AccountSettings() {
               <input
                 type="email"
                 id="email"
-                defaultValue="john.doe@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2 border border-[#ABD1B5] rounded-md focus:outline-none focus:ring-2 focus:ring-[#79B791]"
               />
             </div>
+            {hasUnsavedChanges && (
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveChanges}
+                  className="px-4 py-2 bg-[#79B791] text-white font-medium rounded-md hover:bg-[#ABD1B5] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-[#79B791] focus:ring-offset-2"
+                >
+                  Save Changes
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
@@ -62,7 +123,8 @@ export default function AccountSettings() {
               <input
                 type="checkbox"
                 id="darkMode"
-                defaultChecked
+                checked={darkMode}
+                onChange={() => setDarkMode(!darkMode)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="darkMode" className="ml-2 block text-sm">
@@ -73,7 +135,8 @@ export default function AccountSettings() {
               <input
                 type="checkbox"
                 id="autoSave"
-                defaultChecked
+                checked={autoSave}
+                onChange={() => setAutoSave(!autoSave)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="autoSave" className="ml-2 block text-sm">
@@ -91,7 +154,8 @@ export default function AccountSettings() {
               <input
                 type="checkbox"
                 id="emailNotifications"
-                defaultChecked
+                checked={emailNotifications}
+                onChange={() => setEmailNotifications(!emailNotifications)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="emailNotifications" className="ml-2 block text-sm">
@@ -102,6 +166,8 @@ export default function AccountSettings() {
               <input
                 type="checkbox"
                 id="reminderNotifications"
+                checked={reminderNotifications}
+                onChange={() => setReminderNotifications(!reminderNotifications)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="reminderNotifications" className="ml-2 block text-sm">

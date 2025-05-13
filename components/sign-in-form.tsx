@@ -30,8 +30,16 @@ export default function SignInForm() {
     e.preventDefault()
     console.log("Sign in attempt", { email, password })
 
-    // Compare input credentials with mock user
-    if (email === mockUser.email && password === mockUser.password) {
+    // Kayıtlı kullanıcı e-postasını localStorage'dan al
+    const registeredEmail = localStorage.getItem("userEmail")
+
+    // Giriş başarılı olacak durumlar:
+    // 1. Sabit test kullanıcısı ile eşleşme
+    // 2. VEYA kayıt sırasında kaydedilen e-posta ile eşleşme (demo için şifre kontrolü yapmıyoruz)
+    if (
+      (email === mockUser.email && password === mockUser.password) ||
+      (registeredEmail && email === registeredEmail)
+    ) {
       console.log("Login successful! (Mock)")
       setError("")
       setIsRedirecting(true)
@@ -45,7 +53,7 @@ export default function SignInForm() {
       }, 1500)
     } else {
       console.log("Login failed! Email or password incorrect. (Mock)")
-      setError("Invalid email or password. Please try again.")
+      setError("Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.")
     }
   }
 

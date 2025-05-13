@@ -40,7 +40,7 @@ export default function SignUpForm() {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault()
     setFormError("")
-    setFormSuccess("") // Başarı mesajını sıfırla
+    setFormSuccess("")
 
     if (!email || !password || !confirmPassword) {
       setFormError("Tüm zorunlu alanlar doldurulmalıdır.")
@@ -54,29 +54,26 @@ export default function SignUpForm() {
     setIsSubmitting(true)
 
     try {
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password, name }), // name alanını da gönderiyoruz
-      })
+      // Simulate API call with a timeout
+      await new Promise((resolve) => setTimeout(resolve, 1500))
 
-      const data = await response.json()
+      // Mock successful signup
+      console.log("Sign up successful (mock):", { email, password, name })
+      setFormSuccess("Hesabınız başarıyla oluşturuldu! Giriş sayfasına yönlendiriliyorsunuz...")
 
-      if (response.ok && data.success) {
-        setFormSuccess(data.message + " Giriş sayfasına yönlendiriliyorsunuz...")
-        // localStorage'a bir şey kaydetmek yerine, giriş sonrası token almayı bekleyebiliriz.
-        // Şimdilik direkt yönlendirme yapalım.
-        setTimeout(() => {
-          router.push("/sign-in")
-        }, 2000) // 2 saniye sonra yönlendir
-      } else {
-        setFormError(data.message || "Kayıt sırasında bir hata oluştu.")
+      // Store user info in localStorage for demo purposes
+      localStorage.setItem("userEmail", email)
+      if (name) {
+        localStorage.setItem("userName", name)
       }
+
+      // Redirect to sign-in page after a delay
+      setTimeout(() => {
+        router.push("/sign-in")
+      }, 2000)
     } catch (error) {
-      console.error("Signup fetch error:", error)
-      setFormError("Ağ hatası veya sunucuya ulaşılamıyor.")
+      console.error("Signup error:", error)
+      setFormError("Kayıt sırasında bir hata oluştu.")
     } finally {
       setIsSubmitting(false)
     }
