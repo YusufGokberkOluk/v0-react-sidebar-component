@@ -12,14 +12,31 @@ export interface User {
   updatedAt?: Date
 }
 
-// Kullanıcı oluşturma
-export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
+// Derleme sırasında çalışmayı önlemek için yardımcı fonksiyon
+async function getCollection(collectionName: string) {
   try {
     const client = await clientPromise
     const db = client.db()
+    return db.collection(collectionName)
+  } catch (error) {
+    console.error(`${collectionName} koleksiyonuna erişim hatası:`, error)
+    throw new Error(`Veritabanı bağlantı hatası: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`)
+  }
+}
+
+// Kullanıcı oluşturma
+export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
+  try {
+    // Derleme sırasında çalışmayı önlemek için kontrol
+    if (process.env.NODE_ENV === "development" && process.env.VERCEL_ENV === "preview") {
+      console.warn("Derleme sırasında veritabanı işlemleri devre dışı")
+      return null
+    }
+
+    const collection = await getCollection("users")
 
     // E-posta adresinin zaten kullanımda olup olmadığını kontrol et
-    const existingUser = await db.collection("users").findOne({ email: userData.email })
+    const existingUser = await collection.findOne({ email: userData.email })
     if (existingUser) {
       return null // E-posta zaten kullanımda
     }
@@ -28,7 +45,7 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
     const hashedPassword = await bcrypt.hash(userData.password, 10)
 
     // Kullanıcıyı oluştur
-    const result = await db.collection("users").insertOne({
+    const result = await collection.insertOne({
       ...userData,
       password: hashedPassword,
       createdAt: new Date(),
@@ -36,7 +53,7 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
     })
 
     // Oluşturulan kullanıcıyı döndür (şifre hariç)
-    const newUser = await db.collection("users").findOne({ _id: result.insertedId })
+    const newUser = await collection.findOne({ _id: result.insertedId })
     if (!newUser) return null
 
     // Şifreyi çıkar ve kullanıcıyı döndür
@@ -51,11 +68,16 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
 // Kullanıcı girişi
 export async function loginUser(email: string, password: string): Promise<User | null> {
   try {
-    const client = await clientPromise
-    const db = client.db()
+    // Derleme sırasında çalışmayı önlemek için kontrol
+    if (process.env.NODE_ENV === "development" && process.env.VERCEL_ENV === "preview") {
+      console.warn("Derleme sırasında veritabanı işlemleri devre dışı")
+      return null
+    }
+
+    const collection = await getCollection("users")
 
     // Kullanıcıyı bul
-    const user = (await db.collection("users").findOne({ email })) as User | null
+    const user = (await collection.findOne({ email })) as User | null
     if (!user) return null
 
     // Şifreyi kontrol et
@@ -74,8 +96,7 @@ export async function loginUser(email: string, password: string): Promise<User |
 // Kullanıcı bilgilerini güncelleme
 export async function updateUser(userId: string, userData: Partial<User>): Promise<User | null> {
   try {
-    const client = await clientPromise
-    const db = client.db()
+    const collection = await getCollection("users")
 
     // Şifre güncellenmişse hashle
     if (userData.password) {
@@ -83,7 +104,7 @@ export async function updateUser(userId: string, userData: Partial<User>): Promi
     }
 
     // Kullanıcıyı güncelle
-    await db.collection("users").updateOne(
+    await collection.updateOne(
       { _id: new ObjectId(userId) },
       {
         $set: {
@@ -94,7 +115,7 @@ export async function updateUser(userId: string, userData: Partial<User>): Promi
     )
 
     // Güncellenmiş kullanıcıyı döndür
-    const updatedUser = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+    const updatedUser = await collection.findOne({ _id: new ObjectId(userId) })
     if (!updatedUser) return null
 
     // Şifreyi çıkar ve kullanıcıyı döndür
@@ -109,10 +130,9 @@ export async function updateUser(userId: string, userData: Partial<User>): Promi
 // Kullanıcı silme
 export async function deleteUser(userId: string): Promise<boolean> {
   try {
-    const client = await clientPromise
-    const db = client.db()
+    const collection = await getCollection("users")
 
-    const result = await db.collection("users").deleteOne({ _id: new ObjectId(userId) })
+    const result = await collection.deleteOne({ _id: new ObjectId(userId) })
     return result.deletedCount === 1
   } catch (error) {
     console.error("Error deleting user:", error)
@@ -123,10 +143,9 @@ export async function deleteUser(userId: string): Promise<boolean> {
 // Kullanıcı bilgilerini getirme
 export async function getUserById(userId: string): Promise<User | null> {
   try {
-    const client = await clientPromise
-    const db = client.db()
+    const collection = await getCollection("users")
 
-    const user = (await db.collection("users").findOne({ _id: new ObjectId(userId) })) as User | null
+    const user = (await collection.findOne({ _id: new ObjectId(userId) })) as User | null
     if (!user) return null
 
     // Şifreyi çıkar ve kullanıcıyı döndür
@@ -141,10 +160,9 @@ export async function getUserById(userId: string): Promise<User | null> {
 // E-posta ile kullanıcı bilgilerini getirme
 export async function getUserByEmail(email: string): Promise<User | null> {
   try {
-    const client = await clientPromise
-    const db = client.db()
+    const collection = await getCollection("users")
 
-    const user = (await db.collection("users").findOne({ email })) as User | null
+    const user = (await collection.findOne({ email })) as User | null
     if (!user) return null
 
     // Şifreyi çıkar ve kullanıcıyı döndür
