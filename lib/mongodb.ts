@@ -1,23 +1,27 @@
-import { MongoClient } from "mongodb"
+// MongoDB bağlantı havuzu için iyileştirmeler
+import { MongoClient, type MongoClientOptions } from "mongodb"
 
-// MongoDB URI
 const MONGODB_URI = process.env.MONGODB_URI
 
-// Hata kontrolü
 if (!MONGODB_URI) {
   throw new Error("MONGODB_URI environment variable is not defined")
 }
 
-// Global değişken tanımı
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined
 }
 
-// Bağlantı fonksiyonu
+const options: MongoClientOptions = {
+  maxPoolSize: 10, // Bağlantı havuzu boyutu
+  minPoolSize: 5, // Minimum bağlantı sayısı
+  connectTimeoutMS: 10000, // Bağlantı zaman aşımı
+  socketTimeoutMS: 45000, // Soket zaman aşımı
+}
+
 async function createMongoClient(): Promise<MongoClient> {
   try {
     console.log("Connecting to MongoDB...")
-    const client = new MongoClient(MONGODB_URI!)
+    const client = new MongoClient(MONGODB_URI!, options)
     return await client.connect()
   } catch (error) {
     console.error("MongoDB connection error:", error)
@@ -25,23 +29,19 @@ async function createMongoClient(): Promise<MongoClient> {
   }
 }
 
-// Client promise'i oluştur
 let clientPromise: Promise<MongoClient>
 
-// Development modunda global değişkeni kullan
 if (process.env.NODE_ENV === "development") {
   if (!global._mongoClientPromise) {
     global._mongoClientPromise = createMongoClient()
   }
   clientPromise = global._mongoClientPromise
 } else {
-  // Production modunda
   clientPromise = createMongoClient()
 }
 
 export default clientPromise
 
-// Yardımcı fonksiyon - DB'ye erişim için
 export async function getMongoDb() {
   try {
     const client = await clientPromise

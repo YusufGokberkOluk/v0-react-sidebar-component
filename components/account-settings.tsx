@@ -14,6 +14,56 @@ export default function AccountSettings() {
   const [originalName, setOriginalName] = useState("")
   const [originalEmail, setOriginalEmail] = useState("")
 
+  // Kullanıcı tercihlerini güncelle
+  const handlePreferenceChange = async (preference: string, value: boolean) => {
+    try {
+      // Önce state'i güncelle (UI için)
+      if (preference === "darkMode") setDarkMode(value)
+      if (preference === "autoSave") setAutoSave(value)
+      if (preference === "emailNotifications") setEmailNotifications(value)
+      if (preference === "reminderNotifications") setReminderNotifications(value)
+
+      // Sonra API'ye gönder
+      await fetch("/api/user/preferences", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          darkMode: preference === "darkMode" ? value : darkMode,
+          autoSave: preference === "autoSave" ? value : autoSave,
+          emailNotifications: preference === "emailNotifications" ? value : emailNotifications,
+          reminderNotifications: preference === "reminderNotifications" ? value : reminderNotifications,
+        }),
+      })
+    } catch (error) {
+      console.error("Tercihler güncellenirken hata:", error)
+    }
+  }
+
+  // Kullanıcı tercihlerini yükle
+  useEffect(() => {
+    const fetchUserPreferences = async () => {
+      try {
+        const response = await fetch("/api/user")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success && data.user && data.user.preferences) {
+            const prefs = data.user.preferences
+            if (prefs.darkMode !== undefined) setDarkMode(prefs.darkMode)
+            if (prefs.autoSave !== undefined) setAutoSave(prefs.autoSave)
+            if (prefs.emailNotifications !== undefined) setEmailNotifications(prefs.emailNotifications)
+            if (prefs.reminderNotifications !== undefined) setReminderNotifications(prefs.reminderNotifications)
+          }
+        }
+      } catch (error) {
+        console.error("Kullanıcı tercihleri yüklenirken hata:", error)
+      }
+    }
+
+    fetchUserPreferences()
+  }, [])
+
   // Kullanıcı bilgilerini API'den yükle
   useEffect(() => {
     const fetchUserData = async () => {
@@ -178,7 +228,7 @@ export default function AccountSettings() {
                 type="checkbox"
                 id="darkMode"
                 checked={darkMode}
-                onChange={() => setDarkMode(!darkMode)}
+                onChange={() => handlePreferenceChange("darkMode", !darkMode)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="darkMode" className="ml-2 block text-sm">
@@ -190,7 +240,7 @@ export default function AccountSettings() {
                 type="checkbox"
                 id="autoSave"
                 checked={autoSave}
-                onChange={() => setAutoSave(!autoSave)}
+                onChange={() => handlePreferenceChange("autoSave", !autoSave)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="autoSave" className="ml-2 block text-sm">
@@ -209,7 +259,7 @@ export default function AccountSettings() {
                 type="checkbox"
                 id="emailNotifications"
                 checked={emailNotifications}
-                onChange={() => setEmailNotifications(!emailNotifications)}
+                onChange={() => handlePreferenceChange("emailNotifications", !emailNotifications)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="emailNotifications" className="ml-2 block text-sm">
@@ -221,7 +271,7 @@ export default function AccountSettings() {
                 type="checkbox"
                 id="reminderNotifications"
                 checked={reminderNotifications}
-                onChange={() => setReminderNotifications(!reminderNotifications)}
+                onChange={() => handlePreferenceChange("reminderNotifications", !reminderNotifications)}
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] rounded focus:ring-[#79B791]"
               />
               <label htmlFor="reminderNotifications" className="ml-2 block text-sm">

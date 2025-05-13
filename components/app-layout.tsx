@@ -3,49 +3,17 @@
 import { useState, useEffect } from "react"
 import Sidebar from "./sidebar"
 import Editor from "./editor"
+import { useAppContext } from "@/context/app-context"
 
 type SaveStatus = "idle" | "saving" | "saved" | "error"
 
-interface Page {
-  id: string
-  title: string
-  isFavorite: boolean
-  content: string
-  tags: string[]
-}
-
 export default function AppLayout() {
-  // Sample data with content and tags included
-  const [pages, setPages] = useState<Page[]>([
-    {
-      id: "1",
-      title: "Ana Sayfa",
-      isFavorite: true,
-      content: "Bu ana sayfa içeriğidir. Buraya önemli notlar ekleyebilirsiniz.",
-      tags: ["home", "important"],
-    },
-    {
-      id: "2",
-      title: "Proje Notları",
-      isFavorite: false,
-      content: "Proje notları burada görüntülenecek. Projelerinizle ilgili tüm detayları burada tutabilirsiniz.",
-      tags: ["project", "work"],
-    },
-    {
-      id: "3",
-      title: "Günlük Plan",
-      isFavorite: true,
-      content: "Günlük planınızı buraya yazabilirsiniz. Yapılacaklar listesi ve programınızı düzenleyin.",
-      tags: ["daily", "todo"],
-    },
-  ])
-
-  const [selectedPageId, setSelectedPageId] = useState("1")
+  const { pages, selectedPageId, setSelectedPageId, updatePage } = useAppContext()
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [saveTimer, setSaveTimer] = useState<NodeJS.Timeout | null>(null)
 
   // Find the currently selected page
-  const selectedPage = pages.find((page) => page.id === selectedPageId) || pages[0]
+  const selectedPage = pages.find((page) => page._id === selectedPageId) || pages[0]
 
   // Simulate auto-save functionality
   const triggerSave = () => {
@@ -55,18 +23,19 @@ export default function AppLayout() {
     }
 
     // Set a new timer to save after a delay
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       setSaveStatus("saving")
 
-      // Simulate API call delay
-      setTimeout(() => {
-        // Simulate successful save 95% of the time
-        if (Math.random() > 0.05) {
+      try {
+        // Gerçek kaydetme işlemi
+        if (selectedPage) {
+          await updatePage(selectedPage._id, { content: selectedPage.content })
           setSaveStatus("saved")
-        } else {
-          setSaveStatus("error")
         }
-      }, 1000)
+      } catch (error) {
+        console.error("Save error:", error)
+        setSaveStatus("error")
+      }
     }, 500)
 
     setSaveTimer(timer)
@@ -79,20 +48,27 @@ export default function AppLayout() {
   }
 
   // Handle toggling favorite status
-  const handleToggleFavorite = (pageId: string) => {
-    setPages(pages.map((page) => (page.id === pageId ? { ...page, isFavorite: !page.isFavorite } : page)))
+  const handleToggleFavorite = async (pageId: string) => {
+    const page = pages.find((p) => p._id === pageId)
+    if (page) {
+      await updatePage(pageId, { isFavorite: !page.isFavorite })
+    }
   }
 
   // Handle content changes
   const handleContentChange = (newContent: string) => {
-    setPages(pages.map((page) => (page.id === selectedPageId ? { ...page, content: newContent } : page)))
-    triggerSave()
+    if (selectedPage) {
+      updatePage(selectedPage._id, { content: newContent })
+      triggerSave()
+    }
   }
 
   // Handle tags changes
   const handleTagsChange = (newTags: string[]) => {
-    setPages(pages.map((page) => (page.id === selectedPageId ? { ...page, tags: newTags } : page)))
-    triggerSave()
+    if (selectedPage) {
+      updatePage(selectedPage._id, { tags: newTags })
+      triggerSave()
+    }
   }
 
   // Clean up timer on unmount
@@ -117,15 +93,17 @@ export default function AppLayout() {
           />
         </div>
         <div className="flex-1 p-2 md:p-4 overflow-auto bg-[#f8faf8]">
-          <Editor
-            title={selectedPage.title}
-            pageId={selectedPage.id}
-            initialContent={selectedPage.content}
-            initialTags={selectedPage.tags}
-            saveStatus={saveStatus}
-            onChange={handleContentChange}
-            onTagsChange={handleTagsChange}
-          />
+          {selectedPage && (
+            <Editor
+              title={selectedPage.title}
+              pageId={selectedPage._id}
+              initialContent={selectedPage.content}
+              initialTags={selectedPage.tags}
+              saveStatus={saveStatus}
+              onChange={handleContentChange}
+              onTagsChange={handleTagsChange}
+            />
+          )}
         </div>
       </div>
     </div>
