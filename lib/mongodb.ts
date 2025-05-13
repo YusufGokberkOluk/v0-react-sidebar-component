@@ -8,20 +8,20 @@ declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined
 }
 
-// Derleme sırasında çalışmayı önlemek için
-if (!MONGODB_URI) {
-  throw new Error("Please define the MONGODB_URI environment variable")
-}
-
 // Bağlantı fonksiyonu
 async function createMongoClient() {
-  // Eğer derleme sırasında çalışıyorsa, boş bir promise döndür
-  if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE === "phase-production-build") {
+  // Sadece gerçek derleme aşamasında atla
+  if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
     console.log("Skipping MongoDB connection during build")
     return Promise.resolve({} as MongoClient)
   }
 
+  if (!MONGODB_URI) {
+    throw new Error("Please define the MONGODB_URI environment variable")
+  }
+
   try {
+    console.log("Connecting to MongoDB...")
     const client = new MongoClient(MONGODB_URI)
     return client.connect()
   } catch (error) {

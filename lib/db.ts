@@ -14,8 +14,8 @@ export interface User {
 
 // Derleme sırasında çalışmayı önlemek için yardımcı fonksiyon
 async function getCollection(collectionName: string) {
-  // Derleme sırasında çalışmayı önlemek için kontrol
-  if (process.env.NEXT_PHASE === "phase-production-build") {
+  // Sadece gerçek derleme aşamasında atla
+  if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
     console.log(`Skipping database access to ${collectionName} during build`)
     return {
       findOne: () => Promise.resolve(null),
@@ -26,6 +26,7 @@ async function getCollection(collectionName: string) {
   }
 
   try {
+    console.log(`Accessing collection: ${collectionName}`)
     const client = await clientPromise
     const db = client.db()
     return db.collection(collectionName)
@@ -38,12 +39,13 @@ async function getCollection(collectionName: string) {
 // Kullanıcı oluşturma
 export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
   try {
-    // Derleme sırasında çalışmayı önlemek için kontrol
-    if (process.env.NEXT_PHASE === "phase-production-build") {
+    // Sadece gerçek derleme aşamasında atla
+    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
       console.log("Skipping database operation during build")
       return {} as User
     }
 
+    console.log("Creating user:", userData.email)
     const collection = await getCollection("users")
 
     // E-posta adresinin zaten kullanımda olup olmadığını kontrol et
@@ -87,57 +89,97 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
   }
 }
 
-// Kullanıcı girişi
-export async function loginUser(email: string, password: string): Promise<User | null> {
+// Kullanıcı kimliğine göre kullanıcıyı getir
+export async function getUserById(id: string): Promise<User | null> {
   try {
-    // Derleme sırasında çalışmayı önlemek için kontrol
-    if (process.env.NODE_ENV === "development" && process.env.VERCEL_ENV === "preview") {
-      console.warn("Derleme sırasında veritabanı işlemleri devre dışı")
+    // Sadece gerçek derleme aşamasında atla
+    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
+      console.log("Skipping database operation during build")
+      return {} as User
+    }
+
+    console.log("Getting user by id:", id)
+    const collection = await getCollection("users")
+    const user = await collection.findOne({ _id: new ObjectId(id) })
+
+    if (!user) {
+      console.log("User not found with id:", id)
       return null
     }
 
-    const collection = await getCollection("users")
-
-    // Kullanıcıyı bul
-    const user = (await collection.findOne({ email })) as User | null
-    if (!user) return null
-
-    // Şifreyi kontrol et
-    const isPasswordValid = await bcrypt.compare(password, user.password)
-    if (!isPasswordValid) return null
-
     // Şifreyi çıkar ve kullanıcıyı döndür
-    const { password: _, ...userWithoutPassword } = user
+    const { password, ...userWithoutPassword } = user as User
     return userWithoutPassword as User
   } catch (error) {
-    console.error("Error logging in user:", error)
-    throw error
+    console.error("Error getting user by id:", error)
+    return null
   }
 }
 
-// Kullanıcı bilgilerini güncelleme
-export async function updateUser(userId: string, userData: Partial<User>): Promise<User | null> {
+// Kullanıcıyı e-posta ve şifre ile getir (giriş için)
+export async function loginUser(email: string, password: string): Promise<User | null> {
   try {
+    // Sadece gerçek derleme aşamasında atla
+    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
+      console.log("Skipping database operation during build")
+      return {} as User
+    }
+
+    console.log("Logging in user:", email)
+    const collection = await getCollection("users")
+    const user = await collection.findOne({ email })
+
+    if (!user) {
+      console.log("User not found with email:", email)
+      return null
+    }
+
+    // Şifreyi karşılaştır
+    const passwordMatch = await bcrypt.compare(password, user.password)
+
+    if (!passwordMatch) {
+      console.log("Invalid password for user:", email)
+      return null
+    }
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password: hashedPassword, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
+  } catch (error) {
+    console.error("Error logging in user:", error)
+    return null
+  }
+}
+
+// Kullanıcıyı güncelle
+export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
+  try {
+    // Sadece gerçek derleme aşamasında atla
+    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
+      console.log("Skipping database operation during build")
+      return {} as User
+    }
+
+    console.log("Updating user with id:", id, "data:", userData)
     const collection = await getCollection("users")
 
-    // Şifre güncellenmişse hashle
+    // Şifre güncelleniyorsa hashle
     if (userData.password) {
       userData.password = await bcrypt.hash(userData.password, 10)
     }
 
-    // Kullanıcıyı güncelle
-    await collection.updateOne(
-      { _id: new ObjectId(userId) },
-      {
-        $set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
-      },
+    const result = await collection.updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { ...userData, updatedAt: new Date() } },
     )
 
+    if (result.modifiedCount === 0) {
+      console.log("User not found or no changes applied with id:", id)
+      return null
+    }
+
     // Güncellenmiş kullanıcıyı döndür
-    const updatedUser = await collection.findOne({ _id: new ObjectId(userId) })
+    const updatedUser = await collection.findOne({ _id: new ObjectId(id) })
     if (!updatedUser) return null
 
     // Şifreyi çıkar ve kullanıcıyı döndür
@@ -145,53 +187,31 @@ export async function updateUser(userId: string, userData: Partial<User>): Promi
     return userWithoutPassword as User
   } catch (error) {
     console.error("Error updating user:", error)
-    throw error
+    return null
   }
 }
 
-// Kullanıcı silme
-export async function deleteUser(userId: string): Promise<boolean> {
+// Kullanıcıyı sil
+export async function deleteUser(id: string): Promise<boolean> {
   try {
-    const collection = await getCollection("users")
+    // Sadece gerçek derleme aşamasında atla
+    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
+      console.log("Skipping database operation during build")
+      return true
+    }
 
-    const result = await collection.deleteOne({ _id: new ObjectId(userId) })
-    return result.deletedCount === 1
+    console.log("Deleting user with id:", id)
+    const collection = await getCollection("users")
+    const result = await collection.deleteOne({ _id: new ObjectId(id) })
+
+    if (result.deletedCount === 0) {
+      console.log("User not found with id:", id)
+      return false
+    }
+
+    return true
   } catch (error) {
     console.error("Error deleting user:", error)
-    throw error
-  }
-}
-
-// Kullanıcı bilgilerini getirme
-export async function getUserById(userId: string): Promise<User | null> {
-  try {
-    const collection = await getCollection("users")
-
-    const user = (await collection.findOne({ _id: new ObjectId(userId) })) as User | null
-    if (!user) return null
-
-    // Şifreyi çıkar ve kullanıcıyı döndür
-    const { password, ...userWithoutPassword } = user
-    return userWithoutPassword as User
-  } catch (error) {
-    console.error("Error getting user:", error)
-    throw error
-  }
-}
-
-// E-posta ile kullanıcı bilgilerini getirme
-export async function getUserByEmail(email: string): Promise<User | null> {
-  try {
-    const collection = await getCollection("users")
-
-    const user = (await collection.findOne({ email })) as User | null
-    if (!user) return null
-
-    // Şifreyi çıkar ve kullanıcıyı döndür
-    const { password, ...userWithoutPassword } = user
-    return userWithoutPassword as User
-  } catch (error) {
-    console.error("Error getting user by email:", error)
-    throw error
+    return false
   }
 }
