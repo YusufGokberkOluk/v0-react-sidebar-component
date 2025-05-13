@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server"
-import clientPromise from "@/lib/mongodb"
+import { getMongoDb } from "@/lib/mongodb"
 
 export async function GET() {
-  try {
-    console.log("Test DB API çağrıldı, NEXT_PHASE:", process.env.NEXT_PHASE)
+  console.log("Test DB API called")
 
+  try {
     // MongoDB bağlantısını test et
-    const client = await clientPromise
-    const db = client.db()
+    const db = await getMongoDb()
 
     // Bağlantı başarılı olduğunda
     return NextResponse.json(
@@ -15,8 +14,7 @@ export async function GET() {
         success: true,
         message: "MongoDB bağlantısı başarılı",
         database: db.databaseName,
-        phase: process.env.NEXT_PHASE || "runtime",
-        nodeEnv: process.env.NODE_ENV,
+        nodeEnv: process.env.NODE_ENV || "unknown",
       },
       { status: 200 },
     )
@@ -27,8 +25,7 @@ export async function GET() {
         success: false,
         message: "MongoDB bağlantı hatası",
         error: error instanceof Error ? error.message : "Bilinmeyen hata",
-        phase: process.env.NEXT_PHASE || "runtime",
-        nodeEnv: process.env.NODE_ENV,
+        nodeEnv: process.env.NODE_ENV || "unknown",
       },
       { status: 500 },
     )

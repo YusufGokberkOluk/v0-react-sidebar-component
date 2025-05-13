@@ -1,7 +1,12 @@
 import { MongoClient } from "mongodb"
 
-// MongoDB URI'yi kontrol et
+// MongoDB URI
 const MONGODB_URI = process.env.MONGODB_URI
+
+// Hata kontrolü
+if (!MONGODB_URI) {
+  throw new Error("MONGODB_URI environment variable is not defined")
+}
 
 // Global değişken tanımı
 declare global {
@@ -9,21 +14,11 @@ declare global {
 }
 
 // Bağlantı fonksiyonu
-async function createMongoClient() {
-  // Sadece gerçek derleme aşamasında atla
-  if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-    console.log("Skipping MongoDB connection during build")
-    return Promise.resolve({} as MongoClient)
-  }
-
-  if (!MONGODB_URI) {
-    throw new Error("Please define the MONGODB_URI environment variable")
-  }
-
+async function createMongoClient(): Promise<MongoClient> {
   try {
     console.log("Connecting to MongoDB...")
-    const client = new MongoClient(MONGODB_URI)
-    return client.connect()
+    const client = new MongoClient(MONGODB_URI!)
+    return await client.connect()
   } catch (error) {
     console.error("MongoDB connection error:", error)
     throw error
@@ -33,8 +28,8 @@ async function createMongoClient() {
 // Client promise'i oluştur
 let clientPromise: Promise<MongoClient>
 
+// Development modunda global değişkeni kullan
 if (process.env.NODE_ENV === "development") {
-  // Development modunda global değişkeni kullan
   if (!global._mongoClientPromise) {
     global._mongoClientPromise = createMongoClient()
   }
@@ -45,3 +40,14 @@ if (process.env.NODE_ENV === "development") {
 }
 
 export default clientPromise
+
+// Yardımcı fonksiyon - DB'ye erişim için
+export async function getMongoDb() {
+  try {
+    const client = await clientPromise
+    return client.db()
+  } catch (error) {
+    console.error("Error getting MongoDB database:", error)
+    throw error
+  }
+}

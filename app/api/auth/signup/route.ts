@@ -3,15 +3,6 @@ import { createUser } from "@/lib/db"
 
 export async function POST(req: NextRequest) {
   try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping API execution during build")
-      return new Response(JSON.stringify({ message: "Build time, skipping execution" }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      })
-    }
-
     const { name, email, password } = await req.json()
     console.log("Signup attempt:", { name, email })
 

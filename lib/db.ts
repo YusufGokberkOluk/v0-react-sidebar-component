@@ -1,6 +1,6 @@
-import clientPromise from "./mongodb"
 import { ObjectId } from "mongodb"
 import bcrypt from "bcryptjs"
+import { getMongoDb } from "./mongodb"
 
 // Kullanıcı tipi tanımı
 export interface User {
@@ -14,21 +14,9 @@ export interface User {
 
 // Derleme sırasında çalışmayı önlemek için yardımcı fonksiyon
 async function getCollection(collectionName: string) {
-  // Sadece gerçek derleme aşamasında atla
-  if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-    console.log(`Skipping database access to ${collectionName} during build`)
-    return {
-      findOne: () => Promise.resolve(null),
-      insertOne: () => Promise.resolve({ insertedId: new ObjectId() }),
-      updateOne: () => Promise.resolve({ modifiedCount: 1 }),
-      deleteOne: () => Promise.resolve({ deletedCount: 1 }),
-    }
-  }
-
   try {
     console.log(`Accessing collection: ${collectionName}`)
-    const client = await clientPromise
-    const db = client.db()
+    const db = await getMongoDb()
     return db.collection(collectionName)
   } catch (error) {
     console.error(`${collectionName} koleksiyonuna erişim hatası:`, error)
@@ -39,12 +27,6 @@ async function getCollection(collectionName: string) {
 // Kullanıcı oluşturma
 export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
   try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping database operation during build")
-      return {} as User
-    }
-
     console.log("Creating user:", userData.email)
     const collection = await getCollection("users")
 
@@ -89,42 +71,9 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
   }
 }
 
-// Kullanıcı kimliğine göre kullanıcıyı getir
-export async function getUserById(id: string): Promise<User | null> {
-  try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping database operation during build")
-      return {} as User
-    }
-
-    console.log("Getting user by id:", id)
-    const collection = await getCollection("users")
-    const user = await collection.findOne({ _id: new ObjectId(id) })
-
-    if (!user) {
-      console.log("User not found with id:", id)
-      return null
-    }
-
-    // Şifreyi çıkar ve kullanıcıyı döndür
-    const { password, ...userWithoutPassword } = user as User
-    return userWithoutPassword as User
-  } catch (error) {
-    console.error("Error getting user by id:", error)
-    return null
-  }
-}
-
-// Kullanıcıyı e-posta ve şifre ile getir (giriş için)
+// Kullanıcı girişi
 export async function loginUser(email: string, password: string): Promise<User | null> {
   try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping database operation during build")
-      return {} as User
-    }
-
     console.log("Logging in user:", email)
     const collection = await getCollection("users")
     const user = await collection.findOne({ email })
@@ -151,34 +100,49 @@ export async function loginUser(email: string, password: string): Promise<User |
   }
 }
 
-// Kullanıcıyı güncelle
-export async function updateUser(id: string, userData: Partial<User>): Promise<User | null> {
+// Kullanıcıyı ID'ye göre getir
+export async function getUserById(id: string): Promise<User | null> {
   try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping database operation during build")
-      return {} as User
-    }
-
-    console.log("Updating user with id:", id, "data:", userData)
+    console.log("Getting user by ID:", id)
     const collection = await getCollection("users")
+    const user = await collection.findOne({ _id: new ObjectId(id) })
 
-    // Şifre güncelleniyorsa hashle
-    if (userData.password) {
-      userData.password = await bcrypt.hash(userData.password, 10)
-    }
-
-    const result = await collection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: { ...userData, updatedAt: new Date() } },
-    )
-
-    if (result.modifiedCount === 0) {
-      console.log("User not found or no changes applied with id:", id)
+    if (!user) {
+      console.log("User not found with ID:", id)
       return null
     }
 
-    // Güncellenmiş kullanıcıyı döndür
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
+  } catch (error) {
+    console.error("Error getting user by ID:", error)
+    return null
+  }
+}
+
+// Kullanıcıyı güncelle
+export async function updateUser(id: string, updateData: Partial<User>): Promise<User | null> {
+  try {
+    console.log("Updating user with ID:", id)
+    const collection = await getCollection("users")
+
+    // Şifre güncelleniyorsa, hashle
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10)
+    }
+
+    // updatedAt alanını güncelle
+    updateData.updatedAt = new Date()
+
+    const result = await collection.updateOne({ _id: new ObjectId(id) }, { $set: updateData })
+
+    if (result.modifiedCount === 0) {
+      console.log("User not found or no changes applied with ID:", id)
+      return null
+    }
+
+    // Güncellenmiş kullanıcıyı getir
     const updatedUser = await collection.findOne({ _id: new ObjectId(id) })
     if (!updatedUser) return null
 
@@ -194,18 +158,12 @@ export async function updateUser(id: string, userData: Partial<User>): Promise<U
 // Kullanıcıyı sil
 export async function deleteUser(id: string): Promise<boolean> {
   try {
-    // Sadece gerçek derleme aşamasında atla
-    if (process.env.NEXT_PHASE === "phase-production-build" && process.env.NODE_ENV === "production") {
-      console.log("Skipping database operation during build")
-      return true
-    }
-
-    console.log("Deleting user with id:", id)
+    console.log("Deleting user with ID:", id)
     const collection = await getCollection("users")
     const result = await collection.deleteOne({ _id: new ObjectId(id) })
 
     if (result.deletedCount === 0) {
-      console.log("User not found with id:", id)
+      console.log("User not found with ID:", id)
       return false
     }
 
