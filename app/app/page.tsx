@@ -1,5 +1,11 @@
+"use client"
+
 import AppLayout from "@/components/app-layout"
 
 export default function AppPage() {
-  return <AppLayout />
+  return (
+    <div className="min-h-screen">
+      <AppLayout />
+    </div>
+  )
 }
