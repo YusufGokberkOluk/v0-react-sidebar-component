@@ -213,46 +213,44 @@ export default function AppLayout() {
   }, [saveTimer])
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        <div className="hidden md:block">
-          <Sidebar
-            pages={pages}
-            selectedPageId={selectedPageId || ""}
-            onNavigate={handleNavigate}
-            onToggleFavorite={handleToggleFavorite}
-            onCreatePage={handleCreatePage}
-            onDeletePage={handleDeletePage}
-            isLoading={isLoading}
+    <div className="flex h-screen w-full overflow-hidden">
+      <div className="w-64 flex-shrink-0 border-r border-gray-200">
+        <Sidebar
+          pages={pages}
+          selectedPageId={selectedPageId || ""}
+          onNavigate={handleNavigate}
+          onToggleFavorite={handleToggleFavorite}
+          onCreatePage={handleCreatePage}
+          onDeletePage={handleDeletePage}
+          isLoading={isLoading}
+        />
+      </div>
+      <div className="flex-1 bg-white">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="w-8 h-8 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : selectedPage ? (
+          <Editor
+            title={selectedPage.title}
+            pageId={selectedPage._id}
+            initialContent={selectedPage.content}
+            initialTags={selectedPage.tags}
+            saveStatus={saveStatus}
+            onChange={handleContentChange}
+            onTagsChange={handleTagsChange}
           />
-        </div>
-        <div className="flex-1 p-2 md:p-4 overflow-auto bg-[#f8faf8]">
-          {isLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="w-8 h-8 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
-            </div>
-          ) : selectedPage ? (
-            <Editor
-              title={selectedPage.title}
-              pageId={selectedPage._id}
-              initialContent={selectedPage.content}
-              initialTags={selectedPage.tags}
-              saveStatus={saveStatus}
-              onChange={handleContentChange}
-              onTagsChange={handleTagsChange}
-            />
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-[#13262F]/70">
-              <p className="mb-4">Henüz hiç sayfa yok.</p>
-              <button
-                onClick={handleCreatePage}
-                className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#79B791]/90 transition-colors"
-              >
-                Yeni Sayfa Oluştur
-              </button>
-            </div>
-          )}
-        </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-[#13262F]/70">
+            <p className="mb-4">Henüz hiç sayfa yok.</p>
+            <button
+              onClick={handleCreatePage}
+              className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#79B791]/90 transition-colors"
+            >
+              Yeni Sayfa Oluştur
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

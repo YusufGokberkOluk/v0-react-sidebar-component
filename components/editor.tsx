@@ -268,7 +268,7 @@ export default function Editor({
   }, [hasUnsavedChanges])
 
   return (
-    <div className="h-full w-full bg-white text-[#13262F] rounded-md shadow-sm overflow-hidden flex flex-col">
+    <div className="h-full w-full flex flex-col">
       {loading && (
         <div className="absolute inset-0 bg-white/80 flex items-center justify-center z-10">
           <div className="flex flex-col items-center">
