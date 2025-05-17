@@ -277,7 +277,7 @@ export default function Editor({
           </div>
         </div>
       )}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-[#ABD1B5]/20">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-[#ABD1B5]/20 max-w-4xl mx-auto w-full">
         <input
           type="text"
           value={title}
@@ -303,7 +303,7 @@ export default function Editor({
       </div>
 
       {/* Tags Section */}
-      <div className="px-4 py-2 border-b border-[#ABD1B5]/20">
+      <div className="px-4 py-2 border-b border-[#ABD1B5]/20 max-w-4xl mx-auto w-full">
         <div className="flex flex-wrap items-center gap-1.5">
           {tags.map((tag) => (
             <div
@@ -342,7 +342,7 @@ export default function Editor({
         </div>
       </div>
 
-      <div className="flex items-center px-4 py-1.5 border-b border-[#ABD1B5]/20">
+      <div className="flex items-center px-4 py-1.5 border-b border-[#ABD1B5]/20 max-w-4xl mx-auto w-full">
         <div className="flex items-center space-x-1 overflow-x-auto scrollbar-hide">
           {/* Undo/Redo Buttons */}
           <button
@@ -488,7 +488,7 @@ export default function Editor({
       <textarea
         value={content}
         onChange={handleChange}
-        className="flex-1 w-full p-4 text-[#13262F] bg-white resize-none focus:outline-none focus:ring-0 border-0"
+        className="flex-1 w-full p-4 text-[#13262F] bg-white resize-none focus:outline-none focus:ring-0 border-0 max-w-4xl mx-auto"
         placeholder="Type '/' for commands"
         aria-label={`Edit ${title}`}
         aria-describedby={saveStatus === "error" ? "save-error" : undefined}

@@ -214,7 +214,7 @@ export default function AppLayout() {
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
-      <div className="w-64 flex-shrink-0 border-r border-gray-200">
+      <div className="w-80 flex-shrink-0 border-r border-gray-200">
         <Sidebar
           pages={pages}
           selectedPageId={selectedPageId || ""}
