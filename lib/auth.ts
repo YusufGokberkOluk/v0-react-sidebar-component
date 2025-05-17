@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken"
 import { cookies } from "next/headers"
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
+const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
 
 interface JwtPayload {
   id: string
@@ -28,7 +28,7 @@ export async function verifyJwtToken(token: string): Promise<JwtPayload | null> 
 // Kullanıcı kimliğini token'dan alma
 export async function getUserIdFromToken(): Promise<string | null> {
   const cookieStore = cookies()
-  const token = cookieStore.get("token")?.value
+  const token = cookieStore.get("auth_token")?.value
 
   if (!token) {
     return null
