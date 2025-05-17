@@ -11,22 +11,29 @@ export default function SignInForm() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isRedirecting, setIsRedirecting] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
 
   // Check if user is already logged in
   useEffect(() => {
     const checkAuth = async () => {
+      if (authChecked) return // Prevent multiple checks
+
       try {
+        console.log("Checking if already logged in...")
         const res = await fetch("/api/user")
         if (res.ok) {
+          console.log("Already logged in, redirecting to app")
           router.push("/app")
         }
       } catch (error) {
         console.error("Auth check error:", error)
+      } finally {
+        setAuthChecked(true)
       }
     }
 
     checkAuth()
-  }, [router])
+  }, [router, authChecked])
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,8 +62,11 @@ export default function SignInForm() {
       if (response.ok && data.success) {
         console.log("Login successful!")
 
-        // Redirect to app
-        router.push("/app")
+        // Kısa bir gecikme ekle
+        setTimeout(() => {
+          // Redirect to app
+          router.push("/app")
+        }, 500)
       } else {
         console.log("Login failed:", data.message)
         setError(data.message || "Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.")
@@ -71,6 +81,17 @@ export default function SignInForm() {
 
   const handleForgotPassword = () => {
     console.log("Navigate to Forgot Password")
+  }
+
+  if (!authChecked) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-[#f8faf8]">
+        <div className="flex flex-col items-center">
+          <div className="w-10 h-10 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin mb-3"></div>
+          <p className="text-[#13262F]/70">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (

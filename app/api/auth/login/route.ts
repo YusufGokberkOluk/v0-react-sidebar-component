@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       // JWT token oluştur
       const token = sign(
         {
-          userId: user._id,
+          id: user._id.toString(), // ObjectId'yi string'e çevir
           email: user.email,
         },
         JWT_SECRET,
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
       // Token'ı çerezlere kaydet
       cookies().set({
-        name: "auth_token",
+        name: "token", // auth_token yerine token kullan (tutarlılık için)
         value: token,
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
           success: true,
           message: "Giriş başarılı",
           user: {
-            id: user._id,
+            id: user._id.toString(),
             name: user.name,
             email: user.email,
           },

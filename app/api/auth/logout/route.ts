@@ -3,12 +3,12 @@ import { cookies } from "next/headers"
 
 export async function POST() {
   try {
-    // Auth token çerezini sil
-    cookies().delete("auth_token")
+    // Token çerezini sil
+    cookies().delete("token")
 
-    return NextResponse.json({ success: true, message: "Çıkış başarılı" }, { status: 200 })
+    return NextResponse.json({ success: true, message: "Logged out successfully" })
   } catch (error) {
     console.error("Logout error:", error)
-    return NextResponse.json({ success: false, message: "Çıkış sırasında bir hata oluştu" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Error during logout" }, { status: 500 })
   }
 }
