@@ -226,7 +226,7 @@ export default function AppLayout() {
             isLoading={isLoading}
           />
         </div>
-        <div className="flex-1 p-2 md:p-4 overflow-auto bg-[#f8faf8]">
+        <div className="flex-1 p-2 md:p-4 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
