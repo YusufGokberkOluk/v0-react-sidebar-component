@@ -215,7 +215,7 @@ export default function AppLayout() {
   return (
     <div className="flex flex-col min-h-screen">
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
-        <div className="hidden md:block">
+        <div className="hidden md:block w-64 flex-shrink-0">
           <Sidebar
             pages={pages}
             selectedPageId={selectedPageId || ""}
@@ -226,7 +226,7 @@ export default function AppLayout() {
             isLoading={isLoading}
           />
         </div>
-        <div className="flex-1 p-2 md:p-4 overflow-auto">
+        <div className="flex-1 p-0 overflow-auto">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <div className="w-8 h-8 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>

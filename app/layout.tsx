@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata } from "next"
 import ClientPage from "./ClientPage"
 import dynamic from "next/dynamic"
+import { SpeedInsights } from "@vercel/speed-insights/next"
 
 // Replace the direct imports with lazy loaded ones
 const Header = dynamic(() => import("@/components/header"), {
@@ -25,7 +26,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  return <ClientPage>{children}</ClientPage>
+  return (
+    <ClientPage>
+      {children}
+      <SpeedInsights />
+    </ClientPage>
+  )
 }
 
 
