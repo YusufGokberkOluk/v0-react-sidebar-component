@@ -19,15 +19,13 @@ export default function ClientLayout({
       try {
         const res = await fetch("/api/user")
         if (!res.ok) {
-          console.log("Auth check failed, redirecting to sign-in")
           router.push("/sign-in")
-        } else {
-          console.log("Auth check successful")
-          setIsLoading(false)
         }
       } catch (error) {
         console.error("Auth check error:", error)
         router.push("/sign-in")
+      } finally {
+        setIsLoading(false)
       }
     }
 
