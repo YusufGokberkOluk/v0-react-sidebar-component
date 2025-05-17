@@ -1,111 +1,103 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserById, updateUser, deleteUser } from "@/lib/db"
-import { cookies } from "next/headers"
-import { verify } from "jsonwebtoken"
+import { getUserById, updateUser, deleteUser, deleteAllUserPages } from "@/lib/db"
+import { verifyJwtToken } from "@/lib/auth"
 
-// JWT için gizli anahtar (gerçek uygulamada env değişkeni olarak saklanmalı)
-const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
-
-// Kullanıcı kimliğini doğrulama middleware
-async function authenticateUser(req: NextRequest) {
-  const token = cookies().get("auth_token")?.value
-
-  if (!token) {
-    return null
-  }
-
+// Kullanıcı bilgilerini getirme (GET)
+export async function GET(request: NextRequest) {
   try {
-    const decoded = verify(token, JWT_SECRET) as { userId: string; email: string }
-    return decoded
-  } catch (error) {
-    return null
-  }
-}
-
-// Kullanıcı bilgilerini getir
-export async function GET(req: NextRequest) {
-  try {
-    const auth = await authenticateUser(req)
-
-    if (!auth) {
-      return NextResponse.json({ success: false, message: "Yetkilendirme başarısız" }, { status: 401 })
+    // Token'dan kullanıcı kimliğini al
+    const token = request.cookies.get("token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const user = await getUserById(auth.userId)
+    const payload = await verifyJwtToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    const userId = payload.id
+
+    // Kullanıcı bilgilerini getir
+    const user = await getUserById(userId)
 
     if (!user) {
-      return NextResponse.json({ success: false, message: "Kullanıcı bulunamadı" }, { status: 404 })
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    return NextResponse.json({ success: true, user }, { status: 200 })
+    return NextResponse.json({ user })
   } catch (error) {
-    console.error("Get user error:", error)
-    return NextResponse.json(
-      { success: false, message: "Kullanıcı bilgileri alınırken bir hata oluştu" },
-      { status: 500 },
-    )
+    console.error("Error fetching user:", error)
+    return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 })
   }
 }
 
-// Kullanıcı bilgilerini güncelle
-export async function PUT(req: NextRequest) {
+// Kullanıcı bilgilerini güncelleme (PATCH)
+export async function PATCH(request: NextRequest) {
   try {
-    const auth = await authenticateUser(req)
-
-    if (!auth) {
-      return NextResponse.json({ success: false, message: "Yetkilendirme başarısız" }, { status: 401 })
+    // Token'dan kullanıcı kimliğini al
+    const token = request.cookies.get("token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userData = await req.json()
-
-    // E-posta değişikliği engelle (ayrı bir API endpoint'i olabilir)
-    if (userData.email) {
-      delete userData.email
+    const payload = await verifyJwtToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    const updatedUser = await updateUser(auth.userId, userData)
+    const userId = payload.id
+
+    // İstek gövdesinden güncelleme verilerini al
+    const updateData = await request.json()
+
+    // Kullanıcıyı güncelle
+    const updatedUser = await updateUser(userId, updateData)
 
     if (!updatedUser) {
-      return NextResponse.json({ success: false, message: "Kullanıcı bulunamadı" }, { status: 404 })
+      return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
     }
 
-    return NextResponse.json(
-      { success: true, message: "Kullanıcı bilgileri güncellendi", user: updatedUser },
-      { status: 200 },
-    )
+    return NextResponse.json({ user: updatedUser })
   } catch (error) {
-    console.error("Update user error:", error)
-    return NextResponse.json(
-      { success: false, message: "Kullanıcı bilgileri güncellenirken bir hata oluştu" },
-      { status: 500 },
-    )
+    console.error("Error updating user:", error)
+    return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
   }
 }
 
-// Kullanıcı hesabını sil
-export async function DELETE(req: NextRequest) {
+// Kullanıcıyı silme (DELETE)
+export async function DELETE(request: NextRequest) {
   try {
-    const auth = await authenticateUser(req)
-
-    if (!auth) {
-      return NextResponse.json({ success: false, message: "Yetkilendirme başarısız" }, { status: 401 })
+    // Token'dan kullanıcı kimliğini al
+    const token = request.cookies.get("token")?.value
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const success = await deleteUser(auth.userId)
+    const payload = await verifyJwtToken(token)
+    if (!payload) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    const userId = payload.id
+
+    // Önce kullanıcının tüm sayfalarını sil
+    await deleteAllUserPages(userId)
+
+    // Sonra kullanıcıyı sil
+    const success = await deleteUser(userId)
 
     if (!success) {
-      return NextResponse.json({ success: false, message: "Kullanıcı bulunamadı" }, { status: 404 })
+      return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
     }
 
-    // Auth token çerezini sil
-    cookies().delete("auth_token")
+    // Çerezi temizle
+    const response = NextResponse.json({ success: true })
+    response.cookies.delete("token")
 
-    return NextResponse.json({ success: true, message: "Kullanıcı hesabı başarıyla silindi" }, { status: 200 })
+    return response
   } catch (error) {
-    console.error("Delete user error:", error)
-    return NextResponse.json(
-      { success: false, message: "Kullanıcı hesabı silinirken bir hata oluştu" },
-      { status: 500 },
-    )
+    console.error("Error deleting user:", error)
+    return NextResponse.json({ error: "Failed to delete user" }, { status: 500 })
   }
 }

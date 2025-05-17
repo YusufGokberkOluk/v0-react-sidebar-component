@@ -3,13 +3,14 @@
 import type React from "react"
 import { useState, useMemo, useEffect } from "react"
 import { Star, LogOut, Plus, Trash2, Search, ChevronDown, Check, FolderPlus, LayoutList, Grid2x2 } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 interface Page {
-  id: string
+  _id: string
   title: string
   isFavorite: boolean
-  content?: string // Optional content field
-  tags?: string[] // Optional tags field
+  content?: string
+  tags?: string[]
 }
 
 interface SidebarProps {
@@ -17,20 +18,31 @@ interface SidebarProps {
   selectedPageId?: string
   onNavigate?: (pageId: string) => void
   onToggleFavorite?: (pageId: string) => void
+  onCreatePage?: () => void
+  onDeletePage?: (pageId: string) => void
+  isLoading?: boolean
 }
 
-// Add viewMode type and state inside the Sidebar component
 type ViewMode = "list" | "grid"
 
-export default function Sidebar({ pages = [], selectedPageId, onNavigate, onToggleFavorite }: SidebarProps) {
+export default function Sidebar({
+  pages = [],
+  selectedPageId,
+  onNavigate,
+  onToggleFavorite,
+  onCreatePage,
+  onDeletePage,
+  isLoading = false,
+}: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [isFilteringFavorites, setIsFilteringFavorites] = useState(false)
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false)
   const [currentWorkspace, setCurrentWorkspace] = useState("My Workspace")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [isInitialized, setIsInitialized] = useState(false)
+  const router = useRouter()
 
-  // Load view mode from localStorage on component mount
+  // localStorage'dan görünüm modunu yükle
   useEffect(() => {
     const storedViewMode = localStorage.getItem("sidebarViewMode") as ViewMode | null
     if (storedViewMode && (storedViewMode === "list" || storedViewMode === "grid")) {
@@ -39,17 +51,17 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
     setIsInitialized(true)
   }, [])
 
-  // Save view mode to localStorage whenever it changes
+  // Görünüm modu değiştiğinde localStorage'a kaydet
   useEffect(() => {
     if (isInitialized) {
       localStorage.setItem("sidebarViewMode", viewMode)
     }
   }, [viewMode, isInitialized])
 
-  // Sample workspaces
+  // Örnek çalışma alanları
   const workspaces = ["My Workspace", "Project X", "Personal"]
 
-  // Filter pages based on search query and favorites filter
+  // Arama sorgusu ve favori filtresine göre sayfaları filtrele
   const filteredPages = useMemo(() => {
     return pages.filter((page) => {
       const matchesSearch = page.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -63,36 +75,47 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
   }
 
   const handleToggleFavorite = (e: React.MouseEvent, pageId: string) => {
-    e.stopPropagation() // Prevent triggering the navigation
-    onToggleFavorite?.(pageId) || console.log("Toggle favorite for page:", pageId)
+    e.stopPropagation() // Gezinmeyi tetiklemesini önle
+    onToggleFavorite?.(pageId)
   }
 
   const handleDeletePage = (e: React.MouseEvent, pageId: string) => {
-    e.stopPropagation() // Prevent triggering the navigation
-    console.log("Attempting to delete page:", pageId)
+    e.stopPropagation() // Gezinmeyi tetiklemesini önle
+
+    // Kullanıcıdan onay al
+    if (window.confirm("Bu sayfayı silmek istediğinizden emin misiniz?")) {
+      onDeletePage?.(pageId)
+    }
   }
 
-  const handleSignOut = () => {
-    console.log("Sign out initiated")
-    // Clear the login state
-    localStorage.removeItem("isLoggedIn")
-    // Redirect to home page
-    window.location.href = "/"
+  const handleSignOut = async () => {
+    try {
+      const response = await fetch("/api/auth/logout", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        // Ana sayfaya yönlendir
+        router.push("/")
+      } else {
+        console.error("Logout failed")
+      }
+    } catch (error) {
+      console.error("Error during logout:", error)
+    }
   }
 
   const handleCreateNewPage = () => {
-    console.log("Create New Page action triggered")
+    onCreatePage?.()
   }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value
     setSearchQuery(query)
-    console.log("Search query:", query, "Filter by favorites:", isFilteringFavorites)
   }
 
   const handleToggleFavoritesFilter = () => {
     setIsFilteringFavorites(!isFilteringFavorites)
-    console.log("Search query:", searchQuery, "Filter by favorites:", !isFilteringFavorites)
   }
 
   const toggleWorkspaceDropdown = () => {
@@ -100,7 +123,6 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
   }
 
   const handleSwitchWorkspace = (workspace: string) => {
-    console.log("Switch to workspace:", workspace)
     setCurrentWorkspace(workspace)
     setIsWorkspaceDropdownOpen(false)
   }
@@ -111,13 +133,12 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
   }
 
   const handleSetViewMode = (mode: ViewMode) => {
-    console.log(`Set view to ${mode.charAt(0).toUpperCase() + mode.slice(1)}`)
     setViewMode(mode)
   }
 
   return (
     <div className="flex flex-col h-screen w-64 bg-[#13262F] text-[#EDF4ED] border-r border-[#79B791]/20">
-      {/* Workspace Selector */}
+      {/* Çalışma Alanı Seçici */}
       <div className="relative p-3 border-b border-[#79B791]/20">
         <button
           onClick={toggleWorkspaceDropdown}
@@ -166,7 +187,7 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
       </div>
 
       <div className="p-3 flex-1 overflow-y-auto">
-        {/* Search with Favorites Filter */}
+        {/* Arama ve Favori Filtresi */}
         <div className="relative mb-4">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Search className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
@@ -194,7 +215,7 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-medium text-[#EDF4ED]/70">Pages</h2>
 
-          {/* View Mode Toggle - Enhanced with active state indicators */}
+          {/* Görünüm Modu Değiştirici */}
           <div className="flex rounded-md overflow-hidden border border-[#79B791]/20">
             <button
               onClick={() => handleSetViewMode("list")}
@@ -233,126 +254,137 @@ export default function Sidebar({ pages = [], selectedPageId, onNavigate, onTogg
           New Page
         </button>
 
-        {/* Search Results Status */}
-        {searchQuery && (
-          <div className="text-xs text-[#EDF4ED]/50 mb-2">
-            {filteredPages.length === 0 ? (
-              <p>No results found</p>
-            ) : (
-              <p>
-                Showing {filteredPages.length} {filteredPages.length === 1 ? "result" : "results"}
-                {isFilteringFavorites ? " in favorites" : ""}
-              </p>
-            )}
+        {/* Yükleniyor Durumu */}
+        {isLoading ? (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
           </div>
-        )}
-        {filteredPages.length === 0 && (
-          <div className="py-8 px-4 text-center">
-            <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
-            <p className="text-sm text-[#EDF4ED]/60">
-              {searchQuery
-                ? `No results found for "${searchQuery}"`
-                : isFilteringFavorites
-                  ? "You don't have any favorites yet"
-                  : "No pages found"}
-            </p>
-            {isFilteringFavorites && (
-              <button
-                onClick={() => setIsFilteringFavorites(false)}
-                className="mt-2 text-xs text-[#79B791] hover:text-[#ABD1B5]"
-              >
-                Show all pages
-              </button>
-            )}
-            <button
-              onClick={handleCreateNewPage}
-              className="mt-4 flex items-center justify-center mx-auto px-3 py-1.5 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
-            >
-              <Plus className="h-3.5 w-3.5 mr-1.5" />
-              Create new page
-            </button>
-          </div>
-        )}
-
-        {/* Grid or List View based on viewMode */}
-        {viewMode === "list" ? (
-          <ul className="space-y-0.5">
-            {filteredPages.map((page) => (
-              <li
-                key={page.id}
-                onClick={() => handleNavigate(page.id)}
-                className={`group flex items-center justify-between p-2 rounded-md cursor-pointer transition-all duration-200 ${
-                  selectedPageId === page.id
-                    ? "bg-[#79B791]/30 text-[#EDF4ED]"
-                    : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
-                }`}
-              >
-                <span className="truncate text-sm">{page.title}</span>
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={(e) => handleDeletePage(e, page.id)}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
-                    aria-label={`Delete ${page.title}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-300" />
-                  </button>
-                  <button
-                    onClick={(e) => handleToggleFavorite(e, page.id)}
-                    className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
-                    aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  >
-                    <Star
-                      className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
-                    />
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
         ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {filteredPages.map((page) => (
-              <div
-                key={page.id}
-                onClick={() => handleNavigate(page.id)}
-                className={`group flex flex-col p-3 rounded-md cursor-pointer transition-all duration-200 h-24 relative ${
-                  selectedPageId === page.id
-                    ? "bg-[#79B791]/30 text-[#EDF4ED]"
-                    : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
-                }`}
-              >
-                <div className="flex justify-between items-start">
-                  <h3 className="text-sm font-medium truncate mb-1 pr-6">{page.title}</h3>
-                  <div className="absolute top-2 right-2 flex space-x-1">
-                    <button
-                      onClick={(e) => handleToggleFavorite(e, page.id)}
-                      className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
-                      aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
-                    >
-                      <Star
-                        className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
-                      />
-                    </button>
-                  </div>
-                </div>
-                <p className="text-xs text-[#EDF4ED]/60 line-clamp-2 flex-grow">
-                  {page.content ? page.content.substring(0, 60) + "..." : "No content"}
-                </p>
-                <div className="mt-auto flex justify-between items-center">
-                  <span className="text-xs text-[#EDF4ED]/40">
-                    {page.tags && page.tags.length > 0 ? page.tags[0] : "No tags"}
-                  </span>
-                  <button
-                    onClick={(e) => handleDeletePage(e, page.id)}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
-                    aria-label={`Delete ${page.title}`}
-                  >
-                    <Trash2 className="h-3 w-3 text-red-400 hover:text-red-300" />
-                  </button>
-                </div>
+          <>
+            {/* Arama Sonuçları Durumu */}
+            {searchQuery && (
+              <div className="text-xs text-[#EDF4ED]/50 mb-2">
+                {filteredPages.length === 0 ? (
+                  <p>No results found</p>
+                ) : (
+                  <p>
+                    Showing {filteredPages.length} {filteredPages.length === 1 ? "result" : "results"}
+                    {isFilteringFavorites ? " in favorites" : ""}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
+            )}
+
+            {/* Boş Durum */}
+            {filteredPages.length === 0 && (
+              <div className="py-8 px-4 text-center">
+                <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                <p className="text-sm text-[#EDF4ED]/60">
+                  {searchQuery
+                    ? `No results found for "${searchQuery}"`
+                    : isFilteringFavorites
+                      ? "You don't have any favorites yet"
+                      : "No pages found"}
+                </p>
+                {isFilteringFavorites && (
+                  <button
+                    onClick={() => setIsFilteringFavorites(false)}
+                    className="mt-2 text-xs text-[#79B791] hover:text-[#ABD1B5]"
+                  >
+                    Show all pages
+                  </button>
+                )}
+                <button
+                  onClick={handleCreateNewPage}
+                  className="mt-4 flex items-center justify-center mx-auto px-3 py-1.5 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />
+                  Create new page
+                </button>
+              </div>
+            )}
+
+            {/* Liste veya Grid Görünümü */}
+            {viewMode === "list" ? (
+              <ul className="space-y-0.5">
+                {filteredPages.map((page) => (
+                  <li
+                    key={page._id}
+                    onClick={() => handleNavigate(page._id)}
+                    className={`group flex items-center justify-between p-2 rounded-md cursor-pointer transition-all duration-200 ${
+                      selectedPageId === page._id
+                        ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                        : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
+                    }`}
+                  >
+                    <span className="truncate text-sm">{page.title}</span>
+                    <div className="flex items-center space-x-1">
+                      <button
+                        onClick={(e) => handleDeletePage(e, page._id)}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
+                        aria-label={`Delete ${page.title}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-400 hover:text-red-300" />
+                      </button>
+                      <button
+                        onClick={(e) => handleToggleFavorite(e, page._id)}
+                        className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
+                        aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                      >
+                        <Star
+                          className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
+                        />
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {filteredPages.map((page) => (
+                  <div
+                    key={page._id}
+                    onClick={() => handleNavigate(page._id)}
+                    className={`group flex flex-col p-3 rounded-md cursor-pointer transition-all duration-200 h-24 relative ${
+                      selectedPageId === page._id
+                        ? "bg-[#79B791]/30 text-[#EDF4ED]"
+                        : "hover:bg-[#79B791]/10 text-[#EDF4ED]/90"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <h3 className="text-sm font-medium truncate mb-1 pr-6">{page.title}</h3>
+                      <div className="absolute top-2 right-2 flex space-x-1">
+                        <button
+                          onClick={(e) => handleToggleFavorite(e, page._id)}
+                          className="focus:outline-none p-0.5 rounded hover:bg-[#79B791]/20"
+                          aria-label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
+                        >
+                          <Star
+                            className={`h-3.5 w-3.5 ${page.isFavorite ? "fill-[#ABD1B5] text-[#ABD1B5]" : "text-[#EDF4ED]/40"}`}
+                          />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-[#EDF4ED]/60 line-clamp-2 flex-grow">
+                      {page.content ? page.content.substring(0, 60) + "..." : "No content"}
+                    </p>
+                    <div className="mt-auto flex justify-between items-center">
+                      <span className="text-xs text-[#EDF4ED]/40">
+                        {page.tags && page.tags.length > 0 ? page.tags[0] : "No tags"}
+                      </span>
+                      <button
+                        onClick={(e) => handleDeletePage(e, page._id)}
+                        className="opacity-0 group-hover:opacity-100 focus:opacity-100 focus:outline-none transition-opacity duration-200 p-0.5 rounded hover:bg-[#79B791]/20"
+                        aria-label={`Delete ${page.title}`}
+                      >
+                        <Trash2 className="h-3 w-3 text-red-400 hover:text-red-300" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
