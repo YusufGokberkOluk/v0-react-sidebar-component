@@ -1,51 +1,53 @@
 import type { ObjectId } from "mongodb"
 
 export interface User {
-  _id: ObjectId
-  name: string
+  _id?: string | ObjectId
+  name?: string
   email: string
   password: string
-  createdAt: Date
-  updatedAt: Date
+  createdAt?: Date
+  updatedAt?: Date
 }
 
 export interface Page {
-  _id: ObjectId
+  _id?: string | ObjectId
   title: string
   content: string
   tags: string[]
   isFavorite: boolean
-  userId: ObjectId
-  workspaceId: ObjectId
+  userId: string | ObjectId
+  workspaceId: string | ObjectId // Workspace ID'si eklendi
   createdAt: Date
   updatedAt: Date
 }
 
+// Workspace modeli eklendi
 export interface Workspace {
-  _id: ObjectId
+  _id?: string | ObjectId
   name: string
-  ownerId: ObjectId
+  ownerId: string | ObjectId
   isDefault: boolean
   createdAt: Date
+  updatedAt?: Date
 }
 
+// Workspace paylaşımı için model eklendi
 export interface WorkspaceShare {
-  _id?: ObjectId
-  workspaceId: ObjectId
-  sharedByUserId: ObjectId
+  _id?: string | ObjectId
+  workspaceId: string | ObjectId
+  sharedByUserId: string | ObjectId
   sharedWithEmail: string
   accessLevel: "view" | "edit" | "admin"
   status: "pending" | "accepted" | "rejected"
   createdAt: Date
   updatedAt?: Date
-  sharedPageIds?: ObjectId[] // Paylaşılan sayfa ID'leri
 }
 
 export interface PageShare {
-  _id?: ObjectId
-  pageId: ObjectId
-  workspaceId?: ObjectId
-  sharedByUserId: ObjectId
+  _id?: string | ObjectId
+  pageId: string | ObjectId
+  workspaceId: string | ObjectId // Workspace ID'si eklendi
+  sharedByUserId: string | ObjectId
   sharedWithEmail: string
   accessLevel: "view" | "edit"
   status: "pending" | "accepted" | "rejected"
@@ -54,11 +56,12 @@ export interface PageShare {
 }
 
 export interface Notification {
-  _id?: ObjectId
+  _id?: string | ObjectId
+  userId?: string | ObjectId
   recipientEmail: string
-  type: "share_invitation" | "workspace_invitation" | "system"
+  type: "share_invitation" | "workspace_invitation" | "message" | "document" | "mention" | "reminder" | "error"
   content: string
-  link: string
+  link?: string
   metadata?: {
     workspaceId?: string
     pageId?: string
@@ -67,5 +70,4 @@ export interface Notification {
   }
   read: boolean
   createdAt: Date
-  readAt?: Date
 }

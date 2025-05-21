@@ -1,8 +1,6 @@
 import type { NextRequest } from "next/server"
 import jwt from "jsonwebtoken"
 import { cookies } from "next/headers"
-import { getUserById } from "./db"
-import type { User } from "./db-types"
 
 const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
@@ -61,25 +59,6 @@ export async function getServerSideAuth(): Promise<string | null> {
     return verifyJwtToken(token)
   } catch (error) {
     console.error("Server-side auth error:", error)
-    return null
-  }
-}
-
-// Eksik olan getUserFromRequest fonksiyonunu ekleyelim
-export async function getUserFromRequest(req: NextRequest): Promise<User | null> {
-  try {
-    // Kullanıcı kimliğini doğrula
-    const userId = await verifyAuth(req)
-    if (!userId) {
-      return null
-    }
-
-    // Kullanıcı bilgilerini getir
-    const user = await getUserById(userId)
-    return user
-    // return {id: userId}
-  } catch (error) {
-    console.error("Error getting user from request:", error)
     return null
   }
 }

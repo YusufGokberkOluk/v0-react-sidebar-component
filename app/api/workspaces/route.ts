@@ -1,54 +1,56 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserWorkspaces, createWorkspace } from "@/lib/db"
-import { getUserFromRequest } from "@/lib/auth"
+import { verifyAuth } from "@/lib/auth"
+import { createWorkspace, getUserWorkspaces } from "@/lib/db"
 
-// GET: Kullanıcının workspace'lerini getir
+// Kullanıcının workspace'lerini getir
 export async function GET(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(req)
-
-    if (!user) {
+    // Kullanıcı kimliğini doğrula
+    const userId = await verifyAuth(req)
+    if (!userId) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
     }
 
-    const workspaces = await getUserWorkspaces(user._id.toString())
-
+    // Kullanıcının workspace'lerini getir
+    const workspaces = await getUserWorkspaces(userId)
     return NextResponse.json({ success: true, workspaces })
   } catch (error) {
     console.error("Error fetching workspaces:", error)
-    return NextResponse.json({ success: false, message: "Failed to fetch workspaces" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Workspace'ler getirilirken bir hata oluştu" }, { status: 500 })
   }
 }
 
-// POST: Yeni workspace oluştur
+// Yeni workspace oluştur
 export async function POST(req: NextRequest) {
   try {
-    const user = await getUserFromRequest(req)
-
-    if (!user) {
+    // Kullanıcı kimliğini doğrula
+    const userId = await verifyAuth(req)
+    if (!userId) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
     }
 
-    const { name } = await req.json()
+    // İstek gövdesini al
+    const { name, isDefault } = await req.json()
 
     if (!name) {
-      return NextResponse.json({ success: false, message: "Workspace name is required" }, { status: 400 })
+      return NextResponse.json({ success: false, message: "Workspace adı gereklidir" }, { status: 400 })
     }
 
+    // Workspace oluştur
     const workspace = await createWorkspace({
       name,
-      ownerId: user._id,
-      isDefault: false,
+      ownerId: userId,
+      isDefault: isDefault || false,
       createdAt: new Date(),
     })
 
     if (!workspace) {
-      return NextResponse.json({ success: false, message: "Failed to create workspace" }, { status: 500 })
+      return NextResponse.json({ success: false, message: "Workspace oluşturulamadı" }, { status: 500 })
     }
 
-    return NextResponse.json({ success: true, workspace })
+    return NextResponse.json({ success: true, workspace }, { status: 201 })
   } catch (error) {
     console.error("Error creating workspace:", error)
-    return NextResponse.json({ success: false, message: "Failed to create workspace" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Workspace oluşturulurken bir hata oluştu" }, { status: 500 })
   }
 }

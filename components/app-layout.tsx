@@ -98,18 +98,44 @@ export default function AppLayout() {
     }
   }
 
-  // Workspace seçimi - Kullanıcı sadece bir workspace'e sahip olduğu için basitleştirildi
+  // Workspace seçimi
   const handleSelectWorkspace = (workspaceId: string) => {
-    if (workspaceId === selectedWorkspaceId) return
-
     setSelectedWorkspaceId(workspaceId)
     fetchWorkspacePages(workspaceId)
   }
 
-  // Yeni workspace oluşturma - Bu fonksiyon artık kullanılmayacak
+  // Yeni workspace oluşturma
   const handleCreateWorkspace = async () => {
-    // Bu fonksiyon artık kullanılmayacak, boş bırakılabilir
-    console.log("Workspace creation is disabled")
+    try {
+      const workspaceName = prompt("Enter workspace name:")
+      if (!workspaceName) return
+
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: workspaceName,
+          isDefault: false,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create workspace")
+      }
+
+      const data = await response.json()
+
+      // Workspace'leri güncelle
+      setWorkspaces([...workspaces, data.workspace])
+
+      // Yeni workspace'i seç
+      setSelectedWorkspaceId(data.workspace._id)
+      fetchWorkspacePages(data.workspace._id)
+    } catch (error) {
+      console.error("Error creating workspace:", error)
+    }
   }
 
   // Seçili sayfayı bul
@@ -319,8 +345,7 @@ export default function AppLayout() {
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
           onSelectWorkspace={handleSelectWorkspace}
-          // onCreateWorkspace prop'unu kaldırın veya boş bir fonksiyon gönderin
-          onCreateWorkspace={() => {}}
+          onCreateWorkspace={handleCreateWorkspace}
           isLoading={isLoading}
         />
       </div>

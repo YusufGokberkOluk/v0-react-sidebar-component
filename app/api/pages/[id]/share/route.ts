@@ -3,7 +3,6 @@ import { verifyAuth } from "@/lib/auth"
 import { getMongoDb } from "@/lib/mongodb"
 import { ObjectId } from "mongodb"
 import { getUserByEmail } from "@/lib/db"
-import { addSharedPageWorkspaceToUser } from "@/lib/workspaces"
 import type { PageShare, Notification } from "@/lib/db-types"
 
 // Sayfa paylaşım API'si
@@ -95,7 +94,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       accessLevel,
       status: "pending",
       createdAt: new Date(),
-      workspaceId: page.workspaceId, // Workspace ID'sini ekle
     }
 
     const result = await db.collection("pageShares").insertOne(newShare)
@@ -114,11 +112,6 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     // Davet edilen kullanıcı sistemde kayıtlı mı kontrol et
     const invitedUser = await getUserByEmail(email)
-
-    // Paylaşılan sayfanın workspace'ini kullanıcının workspace listesine ekle
-    if (invitedUser) {
-      await addSharedPageWorkspaceToUser(pageId, page.workspaceId.toString(), email)
-    }
 
     // E-posta gönderme işlemi burada yapılabilir (gerçek uygulamada)
     // Bu örnekte sadece simüle ediyoruz
@@ -196,7 +189,6 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
         _id: share._id.toString(),
         pageId: share.pageId.toString(),
         sharedByUserId: share.sharedByUserId.toString(),
-        workspaceId: share.workspaceId ? share.workspaceId.toString() : undefined,
       })),
     })
   } catch (error) {

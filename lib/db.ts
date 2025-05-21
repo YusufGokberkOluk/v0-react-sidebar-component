@@ -6,7 +6,6 @@ import type { User, Page, PageShare, Notification, Workspace, WorkspaceShare } f
 import { getUserById } from "./users"
 import { createPage } from "./pages"
 import { checkPageAccess } from "./pages"
-import { addSharedPageWorkspaceToUser } from "./workspaces"
 
 // Mevcut fonksiyonları koruyun ve aşağıdaki yeni fonksiyonları ekleyin
 
@@ -352,7 +351,7 @@ export async function createUser(userData: Omit<User, "_id">): Promise<User | nu
       const newUser = await collection.findOne({ _id: result.insertedId })
       if (!newUser) return null
 
-      // Kullanıcı için varsayılan workspace oluştur - "Kullanıcı's Etude" formatında
+      // Kullanıcı için varsayılan workspace oluştur
       const workspace = await createDefaultWorkspace(result.insertedId.toString(), userData.name)
 
       // Varsayılan workspace için varsayılan sayfa oluştur
@@ -468,10 +467,15 @@ export async function sharePage(
 
     await db.collection("notifications").insertOne(notification)
 
-    // Paylaşılan sayfanın workspace'ini kullanıcının workspace listesine ekle
-    // Bu sayede kullanıcı, paylaşılan sayfanın workspace'ine erişebilir
-    if (workspace) {
-      await addSharedPageWorkspaceToUser(pageId, workspace._id.toString(), sharedWithEmail)
+    // Aynı zamanda workspace'i de paylaş
+    if (workspace && workspace.ownerId.toString() === sharedByUserId) {
+      // Workspace sahibiyse, workspace'i de paylaş
+      await shareWorkspace(
+        workspace._id.toString(),
+        sharedByUserId,
+        sharedWithEmail,
+        accessLevel === "edit" ? "edit" : "view",
+      )
     }
 
     const newShare = await db.collection("pageShares").findOne({ _id: result.insertedId })
