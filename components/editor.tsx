@@ -164,6 +164,9 @@ export default function Editor({
 
   const handleTagClick = (tag: string) => {
     console.log("Filter by tag:", tag)
+    // Sidebar'daki tag aramasını tetiklemek için bir özel event yayınlayalım
+    const searchByTagEvent = new CustomEvent("searchByTag", { detail: { tag } })
+    window.dispatchEvent(searchByTagEvent)
   }
 
   const handleRemoveTag = (e: React.MouseEvent, tagToRemove: string) => {

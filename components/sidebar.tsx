@@ -2,7 +2,19 @@
 
 import type React from "react"
 import { useState, useMemo, useEffect } from "react"
-import { Star, LogOut, Plus, Trash2, Search, ChevronDown, Check, FolderPlus, LayoutList, Grid2x2 } from "lucide-react"
+import {
+  Star,
+  LogOut,
+  Plus,
+  Trash2,
+  Search,
+  ChevronDown,
+  Check,
+  FolderPlus,
+  LayoutList,
+  Grid2x2,
+  Tag,
+} from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface Page {
@@ -24,6 +36,7 @@ interface SidebarProps {
 }
 
 type ViewMode = "list" | "grid"
+type SearchMode = "title" | "tag"
 
 export default function Sidebar({
   pages = [],
@@ -35,11 +48,15 @@ export default function Sidebar({
   isLoading = false,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
+  const [tagSearchQuery, setTagSearchQuery] = useState("")
   const [isFilteringFavorites, setIsFilteringFavorites] = useState(false)
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false)
   const [currentWorkspace, setCurrentWorkspace] = useState("My Workspace")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [isInitialized, setIsInitialized] = useState(false)
+  const [searchMode, setSearchMode] = useState<SearchMode>("title")
+  const [searchResults, setSearchResults] = useState<Page[]>([])
+  const [isSearching, setIsSearching] = useState(false)
   const router = useRouter()
 
   // localStorage'dan görünüm modunu yükle
@@ -58,17 +75,86 @@ export default function Sidebar({
     }
   }, [viewMode, isInitialized])
 
+  // Sidebar bileşeninde, useEffect içinde event listener ekleyelim
+  // Bu kodu diğer useEffect'lerin yanına ekleyin
+
+  useEffect(() => {
+    const handleSearchByTagEvent = (event: CustomEvent<{ tag: string }>) => {
+      const { tag } = event.detail
+      setSearchMode("tag")
+      setTagSearchQuery(tag)
+    }
+
+    // Event listener'ı ekle
+    window.addEventListener("searchByTag", handleSearchByTagEvent as EventListener)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("searchByTag", handleSearchByTagEvent as EventListener)
+    }
+  }, [])
+
   // Örnek çalışma alanları
   const workspaces = ["My Workspace", "Project X", "Personal"]
 
+  // Tag ile arama yapma fonksiyonu
+  const searchByTag = async (tag: string) => {
+    if (!tag.trim()) {
+      setSearchResults([])
+      return
+    }
+
+    setIsSearching(true)
+    try {
+      const response = await fetch(`/api/pages/search-by-tag?tag=${encodeURIComponent(tag.trim())}`)
+
+      if (!response.ok) {
+        throw new Error("Tag ile arama yapılırken bir hata oluştu")
+      }
+
+      const data = await response.json()
+      if (data.success) {
+        setSearchResults(data.pages)
+      } else {
+        console.error("Tag ile arama hatası:", data.message)
+        setSearchResults([])
+      }
+    } catch (error) {
+      console.error("Tag ile arama hatası:", error)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  // Tag arama sorgusu değiştiğinde arama yap
+  useEffect(() => {
+    if (searchMode === "tag") {
+      const delayDebounceFn = setTimeout(() => {
+        searchByTag(tagSearchQuery)
+      }, 300)
+
+      return () => clearTimeout(delayDebounceFn)
+    }
+  }, [tagSearchQuery, searchMode])
+
   // Arama sorgusu ve favori filtresine göre sayfaları filtrele
   const filteredPages = useMemo(() => {
+    // Tag araması yapılıyorsa ve sonuçlar varsa, onları göster
+    if (searchMode === "tag" && tagSearchQuery.trim() !== "") {
+      return searchResults.filter((page) => {
+        const matchesFavorite = isFilteringFavorites ? page.isFavorite : true
+        return matchesFavorite
+      })
+    }
+
+    // Normal başlık araması
     return pages.filter((page) => {
       const matchesSearch = page.title.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesFavorite = isFilteringFavorites ? page.isFavorite : true
       return matchesSearch && matchesFavorite
     })
-  }, [pages, searchQuery, isFilteringFavorites])
+  }, [pages, searchQuery, isFilteringFavorites, searchMode, tagSearchQuery, searchResults])
 
   const handleNavigate = (pageId: string) => {
     onNavigate?.(pageId)
@@ -114,6 +200,11 @@ export default function Sidebar({
     setSearchQuery(query)
   }
 
+  const handleTagSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value
+    setTagSearchQuery(query)
+  }
+
   const handleToggleFavoritesFilter = () => {
     setIsFilteringFavorites(!isFilteringFavorites)
   }
@@ -134,6 +225,17 @@ export default function Sidebar({
 
   const handleSetViewMode = (mode: ViewMode) => {
     setViewMode(mode)
+  }
+
+  const handleSetSearchMode = (mode: SearchMode) => {
+    setSearchMode(mode)
+    // Arama modunu değiştirdiğimizde arama sorgularını temizle
+    if (mode === "title") {
+      setTagSearchQuery("")
+      setSearchResults([])
+    } else {
+      setSearchQuery("")
+    }
   }
 
   return (
@@ -187,19 +289,64 @@ export default function Sidebar({
       </div>
 
       <div className="p-3 flex-1 overflow-y-auto">
+        {/* Arama Modu Seçici */}
+        <div className="flex mb-2 border border-[#ABD1B5]/20 rounded-md overflow-hidden">
+          <button
+            onClick={() => handleSetSearchMode("title")}
+            className={`flex-1 py-1.5 text-xs font-medium flex items-center justify-center ${
+              searchMode === "title" ? "bg-[#79B791]/30 text-[#EDF4ED]" : "text-[#EDF4ED]/70 hover:bg-[#79B791]/10"
+            }`}
+          >
+            <Search className="h-3 w-3 mr-1" />
+            Search Pages
+          </button>
+          <button
+            onClick={() => handleSetSearchMode("tag")}
+            className={`flex-1 py-1.5 text-xs font-medium flex items-center justify-center ${
+              searchMode === "tag" ? "bg-[#79B791]/30 text-[#EDF4ED]" : "text-[#EDF4ED]/70 hover:bg-[#79B791]/10"
+            }`}
+          >
+            <Tag className="h-3 w-3 mr-1" />
+            Search by Tag
+          </button>
+        </div>
+
         {/* Arama ve Favori Filtresi */}
         <div className="relative mb-4">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
-          </div>
-          <input
-            type="text"
-            placeholder="Search pages..."
-            value={searchQuery}
-            onChange={handleSearchChange}
-            className="w-full py-1.5 pl-9 pr-9 bg-[#13262F] text-[#EDF4ED] placeholder-[#EDF4ED]/40 border border-[#ABD1B5]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791]/50 text-sm"
-            aria-label="Search pages"
-          />
+          {searchMode === "title" ? (
+            <>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search pages..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full py-1.5 pl-9 pr-9 bg-[#13262F] text-[#EDF4ED] placeholder-[#EDF4ED]/40 border border-[#ABD1B5]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791]/50 text-sm"
+                aria-label="Search pages"
+              />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Tag className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
+              </div>
+              <input
+                type="text"
+                placeholder="Search by tag..."
+                value={tagSearchQuery}
+                onChange={handleTagSearchChange}
+                className="w-full py-1.5 pl-9 pr-9 bg-[#13262F] text-[#EDF4ED] placeholder-[#EDF4ED]/40 border border-[#ABD1B5]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791]/50 text-sm"
+                aria-label="Search by tag"
+              />
+              {isSearching && (
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                  <div className="h-3 w-3 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+            </>
+          )}
           <button
             onClick={handleToggleFavoritesFilter}
             className={`absolute inset-y-0 right-0 pr-3 flex items-center transition-colors ${
@@ -262,7 +409,7 @@ export default function Sidebar({
         ) : (
           <>
             {/* Arama Sonuçları Durumu */}
-            {searchQuery && (
+            {(searchQuery || (searchMode === "tag" && tagSearchQuery)) && (
               <div className="text-xs text-[#EDF4ED]/50 mb-2">
                 {filteredPages.length === 0 ? (
                   <p>No results found</p>
@@ -270,6 +417,7 @@ export default function Sidebar({
                   <p>
                     Showing {filteredPages.length} {filteredPages.length === 1 ? "result" : "results"}
                     {isFilteringFavorites ? " in favorites" : ""}
+                    {searchMode === "tag" && tagSearchQuery ? ` for tag "${tagSearchQuery}"` : ""}
                   </p>
                 )}
               </div>
@@ -278,21 +426,32 @@ export default function Sidebar({
             {/* Boş Durum */}
             {filteredPages.length === 0 && (
               <div className="py-8 px-4 text-center">
-                <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
-                <p className="text-sm text-[#EDF4ED]/60">
-                  {searchQuery
-                    ? `No results found for "${searchQuery}"`
-                    : isFilteringFavorites
-                      ? "You don't have any favorites yet"
-                      : "No pages found"}
-                </p>
-                {isFilteringFavorites && (
-                  <button
-                    onClick={() => setIsFilteringFavorites(false)}
-                    className="mt-2 text-xs text-[#79B791] hover:text-[#ABD1B5]"
-                  >
-                    Show all pages
-                  </button>
+                {searchMode === "tag" && tagSearchQuery ? (
+                  <>
+                    <Tag className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                    <p className="text-sm text-[#EDF4ED]/60">No pages found with tag "{tagSearchQuery}"</p>
+                  </>
+                ) : searchQuery ? (
+                  <>
+                    <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                    <p className="text-sm text-[#EDF4ED]/60">No results found for "{searchQuery}"</p>
+                  </>
+                ) : isFilteringFavorites ? (
+                  <>
+                    <Star className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                    <p className="text-sm text-[#EDF4ED]/60">You don't have any favorites yet</p>
+                    <button
+                      onClick={() => setIsFilteringFavorites(false)}
+                      className="mt-2 text-xs text-[#79B791] hover:text-[#ABD1B5]"
+                    >
+                      Show all pages
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                    <p className="text-sm text-[#EDF4ED]/60">No pages found</p>
+                  </>
                 )}
                 <button
                   onClick={handleCreateNewPage}
