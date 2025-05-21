@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import {
   Bold,
   Italic,
@@ -23,6 +23,7 @@ import {
   Link,
   Code,
   Keyboard,
+  ChevronDown,
 } from "lucide-react"
 import ShareModal from "./share-modal"
 import AiActionsPopup from "./ai-actions-popup"
@@ -73,6 +74,12 @@ export default function Editor({
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   const [isAiActionsOpen, setIsAiActionsOpen] = useState(false)
   const [aiPosition, setAiPosition] = useState<{ top: number; left: number } | null>(null)
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false)
+  const [filteredTags, setFilteredTags] = useState<string[]>([])
+  const [isLoadingTags, setIsLoadingTags] = useState(false)
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const tagDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setContent(initialContent)
@@ -85,6 +92,54 @@ export default function Editor({
   useEffect(() => {
     setPageTitle(title)
   }, [title])
+
+  // Tüm tag'leri getir
+  useEffect(() => {
+    const fetchTags = async () => {
+      setIsLoadingTags(true)
+      try {
+        const response = await fetch("/api/tags")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setAvailableTags(data.tags)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching tags:", error)
+      } finally {
+        setIsLoadingTags(false)
+      }
+    }
+
+    fetchTags()
+  }, [])
+
+  // Tag input değiştiğinde filtreleme yap
+  useEffect(() => {
+    if (newTag.trim() === "") {
+      setFilteredTags(availableTags)
+    } else {
+      const filtered = availableTags.filter(
+        (tag) => tag.toLowerCase().includes(newTag.toLowerCase()) && !tags.includes(tag),
+      )
+      setFilteredTags(filtered)
+    }
+  }, [newTag, availableTags, tags])
+
+  // Dropdown dışına tıklandığında kapat
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setIsTagDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
 
   // Handle save status changes
   useEffect(() => {
@@ -159,7 +214,25 @@ export default function Editor({
       setHasUnsavedChanges(true)
       console.log("Add tag:", newTag.trim())
       onTagsChange?.(updatedTags)
+
+      // Yeni tag'i mevcut tag'lere ekle (eğer henüz yoksa)
+      if (!availableTags.includes(newTag.trim())) {
+        setAvailableTags([...availableTags, newTag.trim()].sort())
+      }
     }
+    setIsTagDropdownOpen(false)
+  }
+
+  const handleSelectTag = (tag: string) => {
+    if (!tags.includes(tag)) {
+      const updatedTags = [...tags, tag]
+      setTags(updatedTags)
+      setNewTag("")
+      setHasUnsavedChanges(true)
+      console.log("Selected tag:", tag)
+      onTagsChange?.(updatedTags)
+    }
+    setIsTagDropdownOpen(false)
   }
 
   const handleTagClick = (tag: string) => {
@@ -178,10 +251,54 @@ export default function Editor({
     onTagsChange?.(updatedTags)
   }
 
+  const handleTagInputFocus = () => {
+    setIsTagDropdownOpen(true)
+  }
+
+  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewTag(e.target.value)
+    setIsTagDropdownOpen(true)
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault()
       handleAddTag()
+    } else if (e.key === "Escape") {
+      setIsTagDropdownOpen(false)
+    } else if (e.key === "ArrowDown" && isTagDropdownOpen && filteredTags.length > 0) {
+      e.preventDefault()
+      const firstOption = document.querySelector("[data-tag-option]") as HTMLElement
+      if (firstOption) {
+        firstOption.focus()
+      }
+    }
+  }
+
+  const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, tag: string, index: number) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      handleSelectTag(tag)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setIsTagDropdownOpen(false)
+      tagInputRef.current?.focus()
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault()
+      const nextOption = document.querySelector(`[data-tag-index="${index + 1}"]`) as HTMLElement
+      if (nextOption) {
+        nextOption.focus()
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      if (index === 0) {
+        tagInputRef.current?.focus()
+      } else {
+        const prevOption = document.querySelector(`[data-tag-index="${index - 1}"]`) as HTMLElement
+        if (prevOption) {
+          prevOption.focus()
+        }
+      }
     }
   }
 
@@ -346,23 +463,80 @@ export default function Editor({
               </button>
             </div>
           ))}
-          <div className="flex items-center">
-            <input
-              type="text"
-              value={newTag}
-              onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Add tag..."
-              className="bg-transparent text-[#13262F] text-xs px-2 py-1 border border-transparent focus:border-[#ABD1B5]/30 rounded-md focus:outline-none focus:ring-0 w-20 sm:w-24"
-            />
-            <button
-              onClick={handleAddTag}
-              disabled={!newTag.trim()}
-              className="flex items-center justify-center text-[#79B791] p-1 rounded-md hover:bg-[#79B791]/10 disabled:opacity-50 disabled:hover:bg-transparent"
-              aria-label="Add tag"
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </button>
+          <div className="relative" ref={tagDropdownRef}>
+            <div className="flex items-center">
+              <input
+                ref={tagInputRef}
+                type="text"
+                value={newTag}
+                onChange={handleTagInputChange}
+                onFocus={handleTagInputFocus}
+                onKeyDown={handleKeyDown}
+                placeholder="Add tag..."
+                className="bg-transparent text-[#13262F] text-xs px-2 py-1 border border-transparent focus:border-[#ABD1B5]/30 rounded-md focus:outline-none focus:ring-0 w-24 sm:w-32"
+                aria-expanded={isTagDropdownOpen}
+                aria-haspopup="listbox"
+                aria-controls="tag-options"
+              />
+              <button
+                onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
+                className="p-1 text-[#13262F]/60 hover:text-[#13262F] focus:outline-none"
+                aria-label="Show tag options"
+              >
+                <ChevronDown className={`h-3 w-3 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              <button
+                onClick={handleAddTag}
+                disabled={!newTag.trim()}
+                className="flex items-center justify-center text-[#79B791] p-1 rounded-md hover:bg-[#79B791]/10 disabled:opacity-50 disabled:hover:bg-transparent"
+                aria-label="Add tag"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            {isTagDropdownOpen && (
+              <div
+                id="tag-options"
+                className="absolute z-10 mt-1 w-48 bg-white rounded-md shadow-lg max-h-60 overflow-auto border border-[#ABD1B5]/20"
+                role="listbox"
+              >
+                {isLoadingTags ? (
+                  <div className="p-2 text-center text-[#13262F]/60 text-xs">
+                    <div className="inline-block h-3 w-3 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin mr-1"></div>
+                    Loading tags...
+                  </div>
+                ) : filteredTags.length === 0 ? (
+                  <div className="p-2 text-center text-[#13262F]/60 text-xs">
+                    {newTag.trim() ? "No matching tags found" : "No tags available"}
+                  </div>
+                ) : (
+                  filteredTags.map((tag, index) => (
+                    <button
+                      key={tag}
+                      onClick={() => handleSelectTag(tag)}
+                      onKeyDown={(e) => handleOptionKeyDown(e, tag, index)}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-[#EDF4ED] focus:bg-[#EDF4ED] focus:outline-none"
+                      role="option"
+                      data-tag-option
+                      data-tag-index={index}
+                      tabIndex={-1}
+                    >
+                      {tag}
+                    </button>
+                  ))
+                )}
+                {newTag.trim() && !availableTags.includes(newTag.trim()) && !tags.includes(newTag.trim()) && (
+                  <button
+                    onClick={handleAddTag}
+                    className="w-full text-left px-3 py-1.5 text-xs text-[#79B791] hover:bg-[#EDF4ED] focus:bg-[#EDF4ED] focus:outline-none border-t border-[#ABD1B5]/10"
+                    role="option"
+                  >
+                    Create "{newTag.trim()}"
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import {
   Star,
   LogOut,
@@ -14,6 +14,7 @@ import {
   LayoutList,
   Grid2x2,
   Tag,
+  X,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 
@@ -57,6 +58,12 @@ export default function Sidebar({
   const [searchMode, setSearchMode] = useState<SearchMode>("title")
   const [searchResults, setSearchResults] = useState<Page[]>([])
   const [isSearching, setIsSearching] = useState(false)
+  const [availableTags, setAvailableTags] = useState<string[]>([])
+  const [isTagDropdownOpen, setIsTagDropdownOpen] = useState(false)
+  const [isLoadingTags, setIsLoadingTags] = useState(false)
+  const [filteredTags, setFilteredTags] = useState<string[]>([])
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const tagDropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
   // localStorage'dan görünüm modunu yükle
@@ -75,14 +82,60 @@ export default function Sidebar({
     }
   }, [viewMode, isInitialized])
 
-  // Sidebar bileşeninde, useEffect içinde event listener ekleyelim
-  // Bu kodu diğer useEffect'lerin yanına ekleyin
+  // Tüm tag'leri getir
+  useEffect(() => {
+    const fetchTags = async () => {
+      setIsLoadingTags(true)
+      try {
+        const response = await fetch("/api/tags")
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setAvailableTags(data.tags)
+            setFilteredTags(data.tags)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching tags:", error)
+      } finally {
+        setIsLoadingTags(false)
+      }
+    }
 
+    fetchTags()
+  }, [])
+
+  // Tag input değiştiğinde filtreleme yap
+  useEffect(() => {
+    if (tagSearchQuery.trim() === "") {
+      setFilteredTags(availableTags)
+    } else {
+      const filtered = availableTags.filter((tag) => tag.toLowerCase().includes(tagSearchQuery.toLowerCase()))
+      setFilteredTags(filtered)
+    }
+  }, [tagSearchQuery, availableTags])
+
+  // Dropdown dışına tıklandığında kapat
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (tagDropdownRef.current && !tagDropdownRef.current.contains(event.target as Node)) {
+        setIsTagDropdownOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
+
+  // Sidebar bileşeninde, useEffect içinde event listener ekleyelim
   useEffect(() => {
     const handleSearchByTagEvent = (event: CustomEvent<{ tag: string }>) => {
       const { tag } = event.detail
       setSearchMode("tag")
       setTagSearchQuery(tag)
+      searchByTag(tag)
     }
 
     // Event listener'ı ekle
@@ -129,7 +182,7 @@ export default function Sidebar({
 
   // Tag arama sorgusu değiştiğinde arama yap
   useEffect(() => {
-    if (searchMode === "tag") {
+    if (searchMode === "tag" && tagSearchQuery.trim()) {
       const delayDebounceFn = setTimeout(() => {
         searchByTag(tagSearchQuery)
       }, 300)
@@ -203,6 +256,65 @@ export default function Sidebar({
   const handleTagSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value
     setTagSearchQuery(query)
+    setIsTagDropdownOpen(true)
+  }
+
+  const handleTagInputFocus = () => {
+    setIsTagDropdownOpen(true)
+  }
+
+  const handleSelectTag = (tag: string) => {
+    setTagSearchQuery(tag)
+    setIsTagDropdownOpen(false)
+    searchByTag(tag)
+  }
+
+  const handleClearTagSearch = () => {
+    setTagSearchQuery("")
+    setSearchResults([])
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && tagSearchQuery.trim()) {
+      e.preventDefault()
+      searchByTag(tagSearchQuery)
+      setIsTagDropdownOpen(false)
+    } else if (e.key === "Escape") {
+      setIsTagDropdownOpen(false)
+    } else if (e.key === "ArrowDown" && isTagDropdownOpen && filteredTags.length > 0) {
+      e.preventDefault()
+      const firstOption = document.querySelector("[data-sidebar-tag-option]") as HTMLElement
+      if (firstOption) {
+        firstOption.focus()
+      }
+    }
+  }
+
+  const handleOptionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, tag: string, index: number) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      handleSelectTag(tag)
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setIsTagDropdownOpen(false)
+      tagInputRef.current?.focus()
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault()
+      const nextOption = document.querySelector(`[data-sidebar-tag-index="${index + 1}"]`) as HTMLElement
+      if (nextOption) {
+        nextOption.focus()
+      }
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      if (index === 0) {
+        tagInputRef.current?.focus()
+      } else {
+        const prevOption = document.querySelector(`[data-sidebar-tag-index="${index - 1}"]`) as HTMLElement
+        if (prevOption) {
+          prevOption.focus()
+        }
+      }
+    }
   }
 
   const handleToggleFavoritesFilter = () => {
@@ -328,24 +440,80 @@ export default function Sidebar({
               />
             </>
           ) : (
-            <>
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Tag className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
+            <div className="relative" ref={tagDropdownRef}>
+              <div className="flex items-center">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Tag className="h-3.5 w-3.5 text-[#EDF4ED]/40" />
+                </div>
+                <input
+                  ref={tagInputRef}
+                  type="text"
+                  placeholder="Search by tag..."
+                  value={tagSearchQuery}
+                  onChange={handleTagSearchChange}
+                  onFocus={handleTagInputFocus}
+                  onKeyDown={handleTagKeyDown}
+                  className="w-full py-1.5 pl-9 pr-16 bg-[#13262F] text-[#EDF4ED] placeholder-[#EDF4ED]/40 border border-[#ABD1B5]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791]/50 text-sm"
+                  aria-label="Search by tag"
+                  aria-expanded={isTagDropdownOpen}
+                  aria-haspopup="listbox"
+                  aria-controls="sidebar-tag-options"
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center space-x-1">
+                  {tagSearchQuery && (
+                    <button
+                      onClick={handleClearTagSearch}
+                      className="p-0.5 rounded-full hover:bg-[#79B791]/20 text-[#EDF4ED]/40 hover:text-[#EDF4ED]/70"
+                      aria-label="Clear search"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
+                    className="p-0.5 rounded-full hover:bg-[#79B791]/20 text-[#EDF4ED]/40 hover:text-[#EDF4ED]/70"
+                    aria-label="Show tag options"
+                  >
+                    <ChevronDown className={`h-3 w-3 transition-transform ${isTagDropdownOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isSearching && (
+                    <div className="h-3 w-3 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
+                  )}
+                </div>
               </div>
-              <input
-                type="text"
-                placeholder="Search by tag..."
-                value={tagSearchQuery}
-                onChange={handleTagSearchChange}
-                className="w-full py-1.5 pl-9 pr-9 bg-[#13262F] text-[#EDF4ED] placeholder-[#EDF4ED]/40 border border-[#ABD1B5]/20 rounded-md focus:outline-none focus:ring-1 focus:ring-[#79B791]/50 text-sm"
-                aria-label="Search by tag"
-              />
-              {isSearching && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                  <div className="h-3 w-3 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
+
+              {isTagDropdownOpen && (
+                <div
+                  id="sidebar-tag-options"
+                  className="absolute z-10 mt-1 w-full bg-[#13262F] rounded-md shadow-lg max-h-60 overflow-auto border border-[#79B791]/20"
+                  role="listbox"
+                >
+                  {isLoadingTags ? (
+                    <div className="p-2 text-center text-[#EDF4ED]/60 text-xs">
+                      <div className="inline-block h-3 w-3 border-2 border-[#79B791] border-t-transparent rounded-full animate-spin mr-1"></div>
+                      Loading tags...
+                    </div>
+                  ) : filteredTags.length === 0 ? (
+                    <div className="p-2 text-center text-[#EDF4ED]/60 text-xs">No tags found</div>
+                  ) : (
+                    filteredTags.map((tag, index) => (
+                      <button
+                        key={tag}
+                        onClick={() => handleSelectTag(tag)}
+                        onKeyDown={(e) => handleOptionKeyDown(e, tag, index)}
+                        className="w-full text-left px-3 py-1.5 text-xs hover:bg-[#79B791]/20 focus:bg-[#79B791]/20 focus:outline-none"
+                        role="option"
+                        data-sidebar-tag-option
+                        data-sidebar-tag-index={index}
+                        tabIndex={-1}
+                      >
+                        {tag}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
-            </>
+            </div>
           )}
           <button
             onClick={handleToggleFavoritesFilter}
