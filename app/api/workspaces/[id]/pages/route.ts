@@ -1,8 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
-import { getWorkspacePages, checkWorkspaceAccess } from "@/lib/db"
+import { getWorkspacePages, checkWorkspaceAccess } from "@/lib/workspaces"
 
-// Workspace'in sayfalarını getir
+// Workspace sayfalarını getir
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Kullanıcı kimliğini doğrula
@@ -15,15 +15,27 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     // Workspace erişim kontrolü
     const access = await checkWorkspaceAccess(workspaceId, userId)
+
     if (!access.hasAccess) {
-      return NextResponse.json({ success: false, message: "Bu workspace'e erişim yetkiniz yok" }, { status: 403 })
+      return NextResponse.json({ success: false, message: "Bu çalışma alanına erişim yetkiniz yok" }, { status: 403 })
     }
 
-    // Workspace'in sayfalarını getir
-    const pages = await getWorkspacePages(workspaceId)
-    return NextResponse.json({ success: true, pages })
+    // Workspace sayfalarını getir
+    const pages = await getWorkspacePages(workspaceId, userId)
+
+    return NextResponse.json({
+      success: true,
+      pages: pages.map((page) => ({
+        ...page,
+        _id: page._id.toString(),
+        userId: page.userId.toString(),
+        workspaceId: page.workspaceId.toString(),
+        createdAt: page.createdAt instanceof Date ? page.createdAt.toISOString() : page.createdAt,
+        updatedAt: page.updatedAt instanceof Date ? page.updatedAt.toISOString() : page.updatedAt,
+      })),
+    })
   } catch (error) {
-    console.error("Error fetching workspace pages:", error)
+    console.error("Workspace sayfalarını getirme hatası:", error)
     return NextResponse.json(
       { success: false, message: "Workspace sayfaları getirilirken bir hata oluştu" },
       { status: 500 },

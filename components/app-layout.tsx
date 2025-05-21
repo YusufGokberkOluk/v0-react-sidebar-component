@@ -98,7 +98,7 @@ export default function AppLayout() {
     }
   }
 
-  // Workspace seçimi - Kullanıcı sadece bir workspace'e sahip olduğu için bu fonksiyon kullanılmayacak
+  // Workspace seçimi - Kullanıcı sadece bir workspace'e sahip olduğu için basitleştirildi
   const handleSelectWorkspace = (workspaceId: string) => {
     if (workspaceId === selectedWorkspaceId) return
 
@@ -106,47 +106,10 @@ export default function AppLayout() {
     fetchWorkspacePages(workspaceId)
   }
 
-  // Yeni workspace oluşturma - Kullanıcı sadece bir workspace'e sahip olduğu için bu fonksiyon kullanılmayacak
+  // Yeni workspace oluşturma - Bu fonksiyon artık kullanılmayacak
   const handleCreateWorkspace = async () => {
-    try {
-      // Kullanıcının zaten bir workspace'i var mı kontrol et
-      if (workspaces.length > 0) {
-        alert("Sadece bir workspace kullanabilirsiniz.")
-        return
-      }
-
-      const workspaceName = prompt("Enter workspace name:")
-      if (!workspaceName) return
-
-      const response = await fetch("/api/workspaces", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: workspaceName,
-          isDefault: true,
-        }),
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        alert(data.message || "Failed to create workspace")
-        return
-      }
-
-      const data = await response.json()
-
-      // Workspace'leri güncelle
-      setWorkspaces([...workspaces, data.workspace])
-
-      // Yeni workspace'i seç
-      setSelectedWorkspaceId(data.workspace._id)
-      fetchWorkspacePages(data.workspace._id)
-    } catch (error) {
-      console.error("Error creating workspace:", error)
-      alert("Failed to create workspace")
-    }
+    // Bu fonksiyon artık kullanılmayacak, boş bırakılabilir
+    console.log("Workspace creation is disabled")
   }
 
   // Seçili sayfayı bul
@@ -356,7 +319,8 @@ export default function AppLayout() {
           onCreatePage={handleCreatePage}
           onDeletePage={handleDeletePage}
           onSelectWorkspace={handleSelectWorkspace}
-          onCreateWorkspace={handleCreateWorkspace}
+          // onCreateWorkspace prop'unu kaldırın veya boş bir fonksiyon gönderin
+          onCreateWorkspace={() => {}}
           isLoading={isLoading}
         />
       </div>

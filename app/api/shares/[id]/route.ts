@@ -2,9 +2,10 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import { getMongoDb } from "@/lib/mongodb"
 import { ObjectId } from "mongodb"
+import { addSharedPageWorkspaceToUser } from "@/lib/workspaces"
 
-// Paylaşım davetini kabul et/reddet
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+// Paylaşım davetini kabul et
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Kullanıcı kimliğini doğrula
     const userId = await verifyAuth(req)
@@ -13,18 +14,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     const shareId = params.id
-    const { status } = await req.json()
-
-    if (!status || (status !== "accepted" && status !== "rejected")) {
-      return NextResponse.json(
-        { success: false, message: "Geçerli bir durum belirtmelisiniz (accepted/rejected)" },
-        { status: 400 },
-      )
-    }
-
     const db = await getMongoDb()
 
-    // Paylaşımın var olduğunu kontrol et
+    // Paylaşımı bul
     const share = await db.collection("pageShares").findOne({
       _id: new ObjectId(shareId),
     })
@@ -33,12 +25,19 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ success: false, message: "Paylaşım bulunamadı" }, { status: 404 })
     }
 
-    // Kullanıcının bu paylaşımı kabul etme/reddetme yetkisi var mı kontrol et
-    const currentUser = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+    // Kullanıcıyı bul
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
+    })
 
-    if (!currentUser || currentUser.email !== share.sharedWithEmail) {
+    if (!user) {
+      return NextResponse.json({ success: false, message: "Kullanıcı bulunamadı" }, { status: 404 })
+    }
+
+    // Kullanıcının bu daveti kabul etme yetkisi var mı kontrol et
+    if (user.email !== share.sharedWithEmail) {
       return NextResponse.json(
-        { success: false, message: "Bu paylaşımı kabul etme/reddetme yetkiniz yok" },
+        { success: false, message: "Bu paylaşım davetini kabul etme yetkiniz yok" },
         { status: 403 },
       )
     }
@@ -48,23 +47,36 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       { _id: new ObjectId(shareId) },
       {
         $set: {
-          status,
+          status: "accepted",
           updatedAt: new Date(),
         },
       },
     )
 
+    // Sayfayı bul
+    const page = await db.collection("pages").findOne({
+      _id: share.pageId,
+    })
+
+    if (page && page.workspaceId) {
+      // Paylaşılan sayfanın workspace'ini kullanıcının workspace listesine ekle
+      await addSharedPageWorkspaceToUser(page._id.toString(), page.workspaceId.toString(), user.email)
+    }
+
     return NextResponse.json({
       success: true,
-      message: status === "accepted" ? "Paylaşım kabul edildi" : "Paylaşım reddedildi",
+      message: "Paylaşım daveti başarıyla kabul edildi",
     })
   } catch (error) {
-    console.error("Paylaşım güncelleme hatası:", error)
-    return NextResponse.json({ success: false, message: "Paylaşım güncellenirken bir hata oluştu" }, { status: 500 })
+    console.error("Paylaşım davetini kabul etme hatası:", error)
+    return NextResponse.json(
+      { success: false, message: "Paylaşım daveti kabul edilirken bir hata oluştu" },
+      { status: 500 },
+    )
   }
 }
 
-// Paylaşımı sil
+// Paylaşım davetini reddet
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     // Kullanıcı kimliğini doğrula
@@ -76,7 +88,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     const shareId = params.id
     const db = await getMongoDb()
 
-    // Paylaşımın var olduğunu kontrol et
+    // Paylaşımı bul
     const share = await db.collection("pageShares").findOne({
       _id: new ObjectId(shareId),
     })
@@ -85,21 +97,21 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       return NextResponse.json({ success: false, message: "Paylaşım bulunamadı" }, { status: 404 })
     }
 
-    // Sayfanın sahibi mi kontrol et
-    const page = await db.collection("pages").findOne({
-      _id: new ObjectId(share.pageId),
+    // Kullanıcıyı bul
+    const user = await db.collection("users").findOne({
+      _id: new ObjectId(userId),
     })
 
-    if (!page) {
-      return NextResponse.json({ success: false, message: "Sayfa bulunamadı" }, { status: 404 })
+    if (!user) {
+      return NextResponse.json({ success: false, message: "Kullanıcı bulunamadı" }, { status: 404 })
     }
 
-    const isOwner = page.userId.toString() === userId
-    const currentUser = await db.collection("users").findOne({ _id: new ObjectId(userId) })
-    const isRecipient = currentUser && currentUser.email === share.sharedWithEmail
-
-    if (!isOwner && !isRecipient) {
-      return NextResponse.json({ success: false, message: "Bu paylaşımı silme yetkiniz yok" }, { status: 403 })
+    // Kullanıcının bu daveti reddetme yetkisi var mı kontrol et
+    if (user.email !== share.sharedWithEmail && share.sharedByUserId.toString() !== userId) {
+      return NextResponse.json(
+        { success: false, message: "Bu paylaşım davetini reddetme yetkiniz yok" },
+        { status: 403 },
+      )
     }
 
     // Paylaşımı sil
@@ -107,10 +119,13 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     return NextResponse.json({
       success: true,
-      message: "Paylaşım başarıyla silindi",
+      message: "Paylaşım daveti başarıyla reddedildi",
     })
   } catch (error) {
-    console.error("Paylaşım silme hatası:", error)
-    return NextResponse.json({ success: false, message: "Paylaşım silinirken bir hata oluştu" }, { status: 500 })
+    console.error("Paylaşım davetini reddetme hatası:", error)
+    return NextResponse.json(
+      { success: false, message: "Paylaşım daveti reddedilirken bir hata oluştu" },
+      { status: 500 },
+    )
   }
 }

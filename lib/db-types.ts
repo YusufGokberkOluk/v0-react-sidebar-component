@@ -1,53 +1,51 @@
 import type { ObjectId } from "mongodb"
 
 export interface User {
-  _id?: string | ObjectId
-  name?: string
+  _id: ObjectId
+  name: string
   email: string
   password: string
-  createdAt?: Date
-  updatedAt?: Date
-}
-
-export interface Page {
-  _id?: string | ObjectId
-  title: string
-  content: string
-  tags: string[]
-  isFavorite: boolean
-  userId: string | ObjectId
-  workspaceId: string | ObjectId // Workspace ID'si eklendi
   createdAt: Date
   updatedAt: Date
 }
 
-// Workspace modeli eklendi
-export interface Workspace {
-  _id?: string | ObjectId
-  name: string
-  ownerId: string | ObjectId
-  isDefault: boolean
+export interface Page {
+  _id: ObjectId
+  title: string
+  content: string
+  tags: string[]
+  isFavorite: boolean
+  userId: ObjectId
+  workspaceId: ObjectId
   createdAt: Date
-  updatedAt?: Date
+  updatedAt: Date
 }
 
-// Workspace paylaşımı için model eklendi
+export interface Workspace {
+  _id: ObjectId
+  name: string
+  ownerId: ObjectId
+  isDefault: boolean
+  createdAt: Date
+}
+
 export interface WorkspaceShare {
-  _id?: string | ObjectId
-  workspaceId: string | ObjectId
-  sharedByUserId: string | ObjectId
+  _id?: ObjectId
+  workspaceId: ObjectId
+  sharedByUserId: ObjectId
   sharedWithEmail: string
   accessLevel: "view" | "edit" | "admin"
   status: "pending" | "accepted" | "rejected"
   createdAt: Date
   updatedAt?: Date
+  sharedPageIds?: ObjectId[] // Paylaşılan sayfa ID'leri
 }
 
 export interface PageShare {
-  _id?: string | ObjectId
-  pageId: string | ObjectId
-  workspaceId: string | ObjectId // Workspace ID'si eklendi
-  sharedByUserId: string | ObjectId
+  _id?: ObjectId
+  pageId: ObjectId
+  workspaceId?: ObjectId
+  sharedByUserId: ObjectId
   sharedWithEmail: string
   accessLevel: "view" | "edit"
   status: "pending" | "accepted" | "rejected"
@@ -56,12 +54,11 @@ export interface PageShare {
 }
 
 export interface Notification {
-  _id?: string | ObjectId
-  userId?: string | ObjectId
+  _id?: ObjectId
   recipientEmail: string
-  type: "share_invitation" | "workspace_invitation" | "message" | "document" | "mention" | "reminder" | "error"
+  type: "share_invitation" | "workspace_invitation" | "system"
   content: string
-  link?: string
+  link: string
   metadata?: {
     workspaceId?: string
     pageId?: string
@@ -70,4 +67,5 @@ export interface Notification {
   }
   read: boolean
   createdAt: Date
+  readAt?: Date
 }
