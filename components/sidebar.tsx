@@ -26,27 +26,13 @@ interface Page {
   tags?: string[]
 }
 
-// Workspace tipi tanımı
-interface Workspace {
-  _id: string
-  name: string
-  ownerId: string
-  isDefault: boolean
-  createdAt: string
-}
-
-// Sidebar props'una workspace'leri ekleyin
 interface SidebarProps {
   pages: Page[]
   selectedPageId?: string
-  workspaces: Workspace[] // Workspace'leri ekleyin
-  selectedWorkspaceId?: string // Seçili workspace ID'sini ekleyin
   onNavigate?: (pageId: string) => void
   onToggleFavorite?: (pageId: string) => void
   onCreatePage?: () => void
   onDeletePage?: (pageId: string) => void
-  onSelectWorkspace?: (workspaceId: string) => void // Workspace seçimi için fonksiyon ekleyin
-  onCreateWorkspace?: () => void // Yeni workspace oluşturma fonksiyonu ekleyin
   isLoading?: boolean
 }
 
@@ -56,14 +42,10 @@ type SearchMode = "title" | "tag"
 export default function Sidebar({
   pages = [],
   selectedPageId,
-  workspaces = [], // Varsayılan boş dizi
-  selectedWorkspaceId,
   onNavigate,
   onToggleFavorite,
   onCreatePage,
   onDeletePage,
-  onSelectWorkspace,
-  onCreateWorkspace,
   isLoading = false,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
@@ -83,11 +65,6 @@ export default function Sidebar({
   const tagInputRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
-
-  // Seçili workspace'i bul
-  const selectedWorkspace = useMemo(() => {
-    return workspaces.find((workspace) => workspace._id === selectedWorkspaceId) || workspaces[0]
-  }, [workspaces, selectedWorkspaceId])
 
   // localStorage'dan görünüm modunu yükle
   useEffect(() => {
@@ -194,7 +171,7 @@ export default function Sidebar({
   }, [])
 
   // Örnek çalışma alanları
-  const workspacesExample = ["My Workspace", "Project X", "Personal"]
+  const workspaces = ["My Workspace", "Project X", "Personal"]
 
   // Tag ile arama yapma fonksiyonu
   const searchByTag = async (tag: string) => {
@@ -368,32 +345,18 @@ export default function Sidebar({
     setIsFilteringFavorites(!isFilteringFavorites)
   }
 
-  // Workspace dropdown'ını aç/kapat
   const toggleWorkspaceDropdown = () => {
     setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)
   }
 
-  // Workspace seçimi
-  const handleSwitchWorkspace = (workspaceId: string) => {
-    onSelectWorkspace?.(workspaceId)
+  const handleSwitchWorkspace = (workspace: string) => {
+    setCurrentWorkspace(workspace)
     setIsWorkspaceDropdownOpen(false)
   }
 
-  // Yeni workspace oluştur
   const handleCreateWorkspace = () => {
-    onCreateWorkspace?.()
+    console.log("Open Create Workspace modal")
     setIsWorkspaceDropdownOpen(false)
-  }
-
-  // Workspace adından ilk harfi al
-  const getWorkspaceInitial = (name: string) => {
-    return name.charAt(0).toUpperCase()
-  }
-
-  // Workspace sahibinin adını göster
-  const getWorkspaceOwnerName = (workspace: Workspace) => {
-    // Workspace adı zaten "Kullanıcı's workspace" formatında ise, direkt göster
-    return workspace.name
   }
 
   const handleSetViewMode = (mode: ViewMode) => {
@@ -421,11 +384,9 @@ export default function Sidebar({
         >
           <div className="flex items-center">
             <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-              {selectedWorkspace ? getWorkspaceInitial(selectedWorkspace.name) : "W"}
+              {currentWorkspace.charAt(0)}
             </div>
-            <span className="font-medium truncate text-sm">
-              {selectedWorkspace ? selectedWorkspace.name : "Workspace"}
-            </span>
+            <span className="font-medium truncate text-sm">{currentWorkspace}</span>
           </div>
           <ChevronDown
             className={`h-4 w-4 transition-transform duration-200 ${isWorkspaceDropdownOpen ? "rotate-180" : ""}`}
@@ -438,15 +399,15 @@ export default function Sidebar({
               <p className="px-3 py-1 text-xs text-[#EDF4ED]/50 font-medium">WORKSPACES</p>
               {workspaces.map((workspace) => (
                 <button
-                  key={workspace._id}
-                  onClick={() => handleSwitchWorkspace(workspace._id)}
+                  key={workspace}
+                  onClick={() => handleSwitchWorkspace(workspace)}
                   className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-[#ABD1B5]/10 transition-all duration-200"
                 >
                   <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-                    {getWorkspaceInitial(workspace.name)}
+                    {workspace.charAt(0)}
                   </div>
-                  <span className="truncate">{getWorkspaceOwnerName(workspace)}</span>
-                  {workspace._id === selectedWorkspaceId && <Check className="h-4 w-4 ml-auto text-[#ABD1B5]" />}
+                  <span>{workspace}</span>
+                  {workspace === currentWorkspace && <Check className="h-4 w-4 ml-auto text-[#ABD1B5]" />}
                 </button>
               ))}
             </div>
