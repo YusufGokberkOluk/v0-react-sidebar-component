@@ -1,13 +1,7 @@
-// Mevcut importları koruyun ve gerekirse güncelleyin
 import { ObjectId } from "mongodb"
-import bcrypt from "bcryptjs"
 import { getMongoDb, getCollection } from "./mongodb"
-import type { User, Page, PageShare, Notification, Workspace, WorkspaceShare } from "./db-types"
+import type { Workspace, WorkspaceShare, Notification, Page } from "./db-types"
 import { getUserById } from "./users"
-import { createPage } from "./pages"
-import { checkPageAccess } from "./pages"
-
-// Mevcut fonksiyonları koruyun ve aşağıdaki yeni fonksiyonları ekleyin
 
 // Kullanıcı için varsayılan workspace oluşturma
 export async function createDefaultWorkspace(userId: string, userName?: string): Promise<Workspace | null> {
@@ -15,17 +9,17 @@ export async function createDefaultWorkspace(userId: string, userName?: string):
     console.log("Creating default workspace for user:", userId)
     const collection = await getCollection<Workspace>("workspaces")
 
-    // Kullanıcı adına göre workspace adı oluştur
-    let workspaceName = "My Workspace"
+    // Kullanıcı adına göre workspace adı oluştur - "Kullanıcı's Etude" formatında
+    let workspaceName = "Etude"
     if (userName) {
-      workspaceName = `${userName}'s workspace`
+      workspaceName = `${userName}'s Etude`
     } else {
       // Kullanıcı adı yoksa, e-posta adresinden al
       const user = await getUserById(userId)
       if (user && user.email) {
         const username = user.email.split("@")[0]
         const formattedUsername = username.charAt(0).toUpperCase() + username.slice(1)
-        workspaceName = `${formattedUsername}'s workspace`
+        workspaceName = `${formattedUsername}'s Etude`
       }
     }
 
@@ -45,58 +39,39 @@ export async function createDefaultWorkspace(userId: string, userName?: string):
   }
 }
 
-// Kullanıcının workspace'lerini getirme
+// Kullanıcının workspace'lerini getirme - Sadece default workspace'i getir
 export async function getUserWorkspaces(userId: string): Promise<Workspace[]> {
   try {
     console.log("Getting workspaces for user:", userId)
     const db = await getMongoDb()
 
-    // Kullanıcının kendi workspace'leri
-    const ownWorkspaces = await db
-      .collection("workspaces")
-      .find({ ownerId: new ObjectId(userId) })
-      .toArray()
+    // Sadece kullanıcının default workspace'ini getir
+    const workspace = await db.collection("workspaces").findOne({ ownerId: new ObjectId(userId), isDefault: true })
 
-    // Kullanıcı bilgilerini al
-    const user = await getUserById(userId)
-    if (!user) {
-      return ownWorkspaces as Workspace[]
-    }
-
-    // Kullanıcıyla paylaşılan workspace'ler
-    const sharedWorkspaces = await db
-      .collection("workspaceShares")
-      .find({
-        sharedWithEmail: user.email,
-        status: "accepted",
-      })
-      .toArray()
-
-    // Paylaşılan workspace ID'lerini al
-    const sharedWorkspaceIds = sharedWorkspaces.map((share) => share.workspaceId)
-
-    // Paylaşılan workspace'lerin detaylarını getir
-    const sharedWorkspaceDetails =
-      sharedWorkspaceIds.length > 0
-        ? await db
-            .collection("workspaces")
-            .find({ _id: { $in: sharedWorkspaceIds } })
-            .toArray()
-        : []
-
-    // Tüm workspace'leri birleştir
-    return [...ownWorkspaces, ...sharedWorkspaceDetails] as Workspace[]
+    return workspace ? ([workspace] as Workspace[]) : []
   } catch (error) {
     console.error("Error getting user workspaces:", error)
     return []
   }
 }
 
-// Workspace oluşturma
+// Workspace oluşturma - Bu fonksiyonu kaldırabiliriz veya sadece admin için tutabiliriz
+// Kullanıcılar sadece default workspace'i kullanacak
 export async function createWorkspace(workspaceData: Omit<Workspace, "_id">): Promise<Workspace | null> {
   try {
     console.log("Creating workspace:", workspaceData.name)
+    // Kullanıcının zaten bir default workspace'i var mı kontrol et
     const collection = await getCollection<Workspace>("workspaces")
+    const existingWorkspace = await collection.findOne({
+      ownerId: workspaceData.ownerId,
+      isDefault: true,
+    })
+
+    if (existingWorkspace) {
+      console.log("User already has a default workspace")
+      return existingWorkspace as Workspace
+    }
+
     const result = await collection.insertOne({
       ...workspaceData,
       createdAt: new Date(),
@@ -316,178 +291,3 @@ export async function checkWorkspaceAccess(
     return { hasAccess: false }
   }
 }
-
-// Kullanıcı oluşturma fonksiyonunu güncelle
-export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
-  try {
-    console.log("Creating user:", userData.email)
-    const collection = await getCollection<User>("users")
-
-    // E-posta adresinin zaten kullanımda olup olmadığını kontrol et
-    try {
-      const existingUser = await collection.findOne({ email: userData.email })
-      if (existingUser) {
-        console.log("Email already in use:", userData.email)
-        return null // E-posta zaten kullanımda
-      }
-    } catch (error) {
-      console.error("Error checking existing user:", error)
-      // Hata durumunda devam et, kullanıcı oluşturmayı dene
-    }
-
-    // Şifreyi hashle
-    const hashedPassword = await bcrypt.hash(userData.password, 10)
-
-    // Kullanıcıyı oluştur
-    try {
-      const result = await collection.insertOne({
-        ...userData,
-        password: hashedPassword,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-
-      // Oluşturulan kullanıcıyı döndür (şifre hariç)
-      const newUser = await collection.findOne({ _id: result.insertedId })
-      if (!newUser) return null
-
-      // Kullanıcı için varsayılan workspace oluştur
-      const workspace = await createDefaultWorkspace(result.insertedId.toString(), userData.name)
-
-      // Varsayılan workspace için varsayılan sayfa oluştur
-      if (workspace) {
-        await createPage({
-          title: "Ana Sayfa",
-          content: "Hoş geldiniz! Bu sizin ana sayfanızdır. Buraya önemli notlar ekleyebilirsiniz.",
-          tags: ["home", "important"],
-          isFavorite: true,
-          userId: result.insertedId,
-          workspaceId: workspace._id as ObjectId,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-      }
-
-      // Şifreyi çıkar ve kullanıcıyı döndür
-      const { password, ...userWithoutPassword } = newUser as User
-      return userWithoutPassword as User
-    } catch (insertError) {
-      console.error("Error inserting new user:", insertError)
-      return null
-    }
-  } catch (error) {
-    console.error("Error creating user:", error)
-    return null // Hata durumunda null döndür
-  }
-}
-
-// Sayfa paylaşım fonksiyonunu güncelle
-export async function sharePage(
-  pageId: string,
-  sharedByUserId: string,
-  sharedWithEmail: string,
-  accessLevel: "view" | "edit",
-): Promise<PageShare | null> {
-  try {
-    console.log("Sharing page:", pageId, "with:", sharedWithEmail)
-    const db = await getMongoDb()
-
-    // Sayfanın var olduğunu kontrol et
-    const page = await db.collection("pages").findOne({ _id: new ObjectId(pageId) })
-
-    if (!page) {
-      console.log("Page not found:", pageId)
-      return null
-    }
-
-    // Paylaşım yapan kullanıcının sayfaya erişim yetkisi var mı kontrol et
-    const access = await checkPageAccess(pageId, sharedByUserId)
-    if (!access.hasAccess || (access.accessLevel !== "owner" && access.accessLevel !== "edit")) {
-      console.log("User does not have permission to share the page:", sharedByUserId)
-      return null
-    }
-
-    // Zaten paylaşılmış mı kontrol et
-    const existingShare = await db.collection("pageShares").findOne({
-      pageId: new ObjectId(pageId),
-      sharedWithEmail,
-    })
-
-    if (existingShare) {
-      // Erişim seviyesini güncelle
-      await db.collection("pageShares").updateOne(
-        { _id: existingShare._id },
-        {
-          $set: {
-            accessLevel,
-            updatedAt: new Date(),
-          },
-        },
-      )
-
-      const updatedShare = await db.collection("pageShares").findOne({ _id: existingShare._id })
-
-      return updatedShare as PageShare
-    }
-
-    // Yeni paylaşım oluştur
-    const pageShare: PageShare = {
-      pageId: new ObjectId(pageId),
-      workspaceId: page.workspaceId,
-      sharedByUserId: new ObjectId(sharedByUserId),
-      sharedWithEmail,
-      accessLevel,
-      status: "pending",
-      createdAt: new Date(),
-    }
-
-    const result = await db.collection("pageShares").insertOne(pageShare)
-
-    // Paylaşım yapan kullanıcıyı bul
-    const sharingUser = await getUserById(sharedByUserId)
-
-    // Workspace bilgilerini getir
-    const workspace = await db.collection("workspaces").findOne({ _id: page.workspaceId })
-
-    // Bildirim oluştur
-    const notification: Notification = {
-      recipientEmail: sharedWithEmail,
-      type: "share_invitation",
-      content: `${sharingUser?.name || "Bir kullanıcı"} sizinle "${page.title}" sayfasını paylaştı.`,
-      link: `/app?page=${pageId}`,
-      metadata: {
-        workspaceId: workspace ? workspace._id.toString() : undefined,
-        pageId: pageId,
-        senderId: sharedByUserId,
-        senderName: sharingUser?.name,
-      },
-      read: false,
-      createdAt: new Date(),
-    }
-
-    await db.collection("notifications").insertOne(notification)
-
-    // Aynı zamanda workspace'i de paylaş
-    if (workspace && workspace.ownerId.toString() === sharedByUserId) {
-      // Workspace sahibiyse, workspace'i de paylaş
-      await shareWorkspace(
-        workspace._id.toString(),
-        sharedByUserId,
-        sharedWithEmail,
-        accessLevel === "edit" ? "edit" : "view",
-      )
-    }
-
-    const newShare = await db.collection("pageShares").findOne({ _id: result.insertedId })
-
-    return newShare as PageShare
-  } catch (error) {
-    console.error("Error sharing page:", error)
-    return null
-  }
-}
-
-// Tüm fonksiyonları ilgili modüllerden export edelim
-export * from "./users"
-export * from "./pages"
-export * from "./workspaces"

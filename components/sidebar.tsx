@@ -2,20 +2,7 @@
 
 import type React from "react"
 import { useState, useMemo, useEffect, useRef } from "react"
-import {
-  Star,
-  LogOut,
-  Plus,
-  Trash2,
-  Search,
-  ChevronDown,
-  Check,
-  FolderPlus,
-  LayoutList,
-  Grid2x2,
-  Tag,
-  X,
-} from "lucide-react"
+import { Star, LogOut, Plus, Trash2, Search, ChevronDown, LayoutList, Grid2x2, Tag, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 interface Page {
@@ -26,13 +13,27 @@ interface Page {
   tags?: string[]
 }
 
+// Workspace tipi tanımı
+interface Workspace {
+  _id: string
+  name: string
+  ownerId: string
+  isDefault: boolean
+  createdAt: string
+}
+
+// Sidebar props'una workspace'leri ekleyin
 interface SidebarProps {
   pages: Page[]
   selectedPageId?: string
+  workspaces: Workspace[] // Workspace'leri ekleyin
+  selectedWorkspaceId?: string // Seçili workspace ID'sini ekleyin
   onNavigate?: (pageId: string) => void
   onToggleFavorite?: (pageId: string) => void
   onCreatePage?: () => void
   onDeletePage?: (pageId: string) => void
+  onSelectWorkspace?: (workspaceId: string) => void // Workspace seçimi için fonksiyon ekleyin
+  onCreateWorkspace?: () => void // Yeni workspace oluşturma fonksiyonu ekleyin
   isLoading?: boolean
 }
 
@@ -42,17 +43,20 @@ type SearchMode = "title" | "tag"
 export default function Sidebar({
   pages = [],
   selectedPageId,
+  workspaces = [], // Varsayılan boş dizi
+  selectedWorkspaceId,
   onNavigate,
   onToggleFavorite,
   onCreatePage,
   onDeletePage,
+  onSelectWorkspace,
+  onCreateWorkspace,
   isLoading = false,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [tagSearchQuery, setTagSearchQuery] = useState("")
   const [isFilteringFavorites, setIsFilteringFavorites] = useState(false)
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false)
-  const [currentWorkspace, setCurrentWorkspace] = useState("My Workspace")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [isInitialized, setIsInitialized] = useState(false)
   const [searchMode, setSearchMode] = useState<SearchMode>("title")
@@ -65,6 +69,11 @@ export default function Sidebar({
   const tagInputRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  // Seçili workspace'i bul
+  const selectedWorkspace = useMemo(() => {
+    return workspaces.find((workspace) => workspace._id === selectedWorkspaceId) || workspaces[0]
+  }, [workspaces, selectedWorkspaceId])
 
   // localStorage'dan görünüm modunu yükle
   useEffect(() => {
@@ -169,9 +178,6 @@ export default function Sidebar({
       window.removeEventListener("searchByTag", handleSearchByTagEvent as EventListener)
     }
   }, [])
-
-  // Örnek çalışma alanları
-  const workspaces = ["My Workspace", "Project X", "Personal"]
 
   // Tag ile arama yapma fonksiyonu
   const searchByTag = async (tag: string) => {
@@ -345,18 +351,26 @@ export default function Sidebar({
     setIsFilteringFavorites(!isFilteringFavorites)
   }
 
+  // Workspace dropdown'ını aç/kapat
   const toggleWorkspaceDropdown = () => {
     setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)
   }
 
-  const handleSwitchWorkspace = (workspace: string) => {
-    setCurrentWorkspace(workspace)
+  // Workspace seçimi - Kullanıcı sadece bir workspace'e sahip olduğu için bu fonksiyon kullanılmayacak
+  const handleSwitchWorkspace = (workspaceId: string) => {
+    onSelectWorkspace?.(workspaceId)
     setIsWorkspaceDropdownOpen(false)
   }
 
+  // Yeni workspace oluştur - Kullanıcı sadece bir workspace'e sahip olduğu için bu fonksiyon kullanılmayacak
   const handleCreateWorkspace = () => {
-    console.log("Open Create Workspace modal")
+    onCreateWorkspace?.()
     setIsWorkspaceDropdownOpen(false)
+  }
+
+  // Workspace adından ilk harfi al
+  const getWorkspaceInitial = (name: string) => {
+    return name.charAt(0).toUpperCase()
   }
 
   const handleSetViewMode = (mode: ViewMode) => {
@@ -384,44 +398,16 @@ export default function Sidebar({
         >
           <div className="flex items-center">
             <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-              {currentWorkspace.charAt(0)}
+              {selectedWorkspace ? getWorkspaceInitial(selectedWorkspace.name) : "E"}
             </div>
-            <span className="font-medium truncate text-sm">{currentWorkspace}</span>
+            <span className="font-medium truncate text-sm">{selectedWorkspace ? selectedWorkspace.name : "Etude"}</span>
           </div>
           <ChevronDown
             className={`h-4 w-4 transition-transform duration-200 ${isWorkspaceDropdownOpen ? "rotate-180" : ""}`}
           />
         </button>
 
-        {isWorkspaceDropdownOpen && (
-          <div className="absolute left-3 right-3 mt-1 z-10 bg-[#13262F] border border-[#79B791]/20 rounded-md shadow-lg overflow-hidden">
-            <div className="py-1">
-              <p className="px-3 py-1 text-xs text-[#EDF4ED]/50 font-medium">WORKSPACES</p>
-              {workspaces.map((workspace) => (
-                <button
-                  key={workspace}
-                  onClick={() => handleSwitchWorkspace(workspace)}
-                  className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-[#ABD1B5]/10 transition-all duration-200"
-                >
-                  <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-                    {workspace.charAt(0)}
-                  </div>
-                  <span>{workspace}</span>
-                  {workspace === currentWorkspace && <Check className="h-4 w-4 ml-auto text-[#ABD1B5]" />}
-                </button>
-              ))}
-            </div>
-            <div className="border-t border-[#79B791]/20 py-1">
-              <button
-                onClick={handleCreateWorkspace}
-                className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-[#ABD1B5]/10 transition-all duration-200"
-              >
-                <FolderPlus className="h-4 w-4 mr-2 text-[#79B791]" />
-                Create New Workspace
-              </button>
-            </div>
-          </div>
-        )}
+        {/* Workspace dropdown'ını kaldırdık çünkü kullanıcı sadece bir workspace'e sahip olacak */}
       </div>
 
       <div className="p-3 flex-1 overflow-y-auto">
