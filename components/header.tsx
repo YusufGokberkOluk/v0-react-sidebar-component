@@ -94,43 +94,21 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
     const fetchNotifications = async () => {
       setIsLoading(true)
       try {
-        // In a real app, this would be an API call
-        await new Promise((resolve) => setTimeout(resolve, 800))
+        // Gerçek API çağrısı
+        const response = await fetch("/api/notifications")
 
-        setNotifications([
-          {
-            id: "1",
-            type: "message",
-            content: "John commented on your document",
-            time: "2 hours ago",
-            read: false,
-            link: "/app?document=123&comment=456",
-          },
-          {
-            id: "2",
-            type: "document",
-            content: "Sarah shared a document with you",
-            time: "5 hours ago",
-            read: false,
-            link: "/app?document=789",
-          },
-          {
-            id: "3",
-            type: "mention",
-            content: "You were mentioned in Project Notes",
-            time: "Yesterday",
-            read: true,
-            link: "/app?document=456&mention=123",
-          },
-          {
-            id: "4",
-            type: "reminder",
-            content: "Meeting with the design team in 30 minutes",
-            time: "30 minutes ago",
-            read: false,
-          },
-        ])
-        setHasError(false)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setNotifications(data.notifications)
+          } else {
+            console.error("Error fetching notifications:", data.message)
+            setHasError(true)
+          }
+        } else {
+          console.error("Failed to fetch notifications")
+          setHasError(true)
+        }
       } catch (error) {
         console.error("Error fetching notifications:", error)
         setHasError(true)
@@ -245,19 +223,58 @@ export default function Header({ toggleTheme, theme = "light" }: HeaderProps) {
     // In a real app, this would trigger a search
   }
 
-  const markAllAsRead = (e: React.MouseEvent) => {
+  const markAllAsRead = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    setNotifications(notifications.map((n) => ({ ...n, read: true })))
+
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "PATCH",
+      })
+
+      if (response.ok) {
+        setNotifications(notifications.map((n) => ({ ...n, read: true })))
+      } else {
+        console.error("Failed to mark notifications as read")
+      }
+    } catch (error) {
+      console.error("Error marking notifications as read:", error)
+    }
   }
 
-  const markAsRead = (id: string, e: React.MouseEvent) => {
+  const markAsRead = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
+
+    try {
+      const response = await fetch(`/api/notifications/${id}`, {
+        method: "PATCH",
+      })
+
+      if (response.ok) {
+        setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
+      } else {
+        console.error("Failed to mark notification as read")
+      }
+    } catch (error) {
+      console.error("Error marking notification as read:", error)
+    }
   }
 
-  const dismissNotification = (id: string, e: React.MouseEvent) => {
+  const dismissNotification = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setNotifications(notifications.filter((n) => n.id !== id))
+
+    try {
+      const response = await fetch(`/api/notifications/${id}`, {
+        method: "DELETE",
+      })
+
+      if (response.ok) {
+        setNotifications(notifications.filter((n) => n.id !== id))
+      } else {
+        console.error("Failed to dismiss notification")
+      }
+    } catch (error) {
+      console.error("Error dismissing notification:", error)
+    }
   }
 
   const handleNotificationClick = (notification: Notification) => {

@@ -218,6 +218,12 @@ export default function Editor({
       // Yeni tag'i mevcut tag'lere ekle (eğer henüz yoksa)
       if (!availableTags.includes(newTag.trim())) {
         setAvailableTags([...availableTags, newTag.trim()].sort())
+
+        // Yeni tag eklendiğinde bir event yayınla
+        const tagAddedEvent = new CustomEvent("tagAdded", {
+          detail: { tag: newTag.trim() },
+        })
+        window.dispatchEvent(tagAddedEvent)
       }
     }
     setIsTagDropdownOpen(false)

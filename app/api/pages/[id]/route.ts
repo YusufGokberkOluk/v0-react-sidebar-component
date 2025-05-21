@@ -1,6 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getPageById, updatePage, deletePage } from "@/lib/db"
 import { verifyAuth } from "@/lib/auth"
+import { getPageById, updatePage, deletePage, checkPageAccess } from "@/lib/db"
+
+// Belirli bir sayfayı getir
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    // Kullanıcı kimliğini doğrula
+    const userId = await verifyAuth(req)
+    if (!userId) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
+    }
+
+    const pageId = params.id
+
+    // Sayfanın var olduğunu kontrol et
+    const page = await getPageById(pageId)
+    if (!page) {
+      return NextResponse.json({ success: false, message: "Sayfa bulunamadı" }, { status: 404 })
+    }
+
+    // Erişim kontrolü
+    const access = await checkPageAccess(pageId, userId)
+    if (!access.hasAccess) {
+      return NextResponse.json({ success: false, message: "Bu sayfaya erişim yetkiniz yok" }, { status: 403 })
+    }
+
+    return NextResponse.json({ success: true, page, accessLevel: access.accessLevel })
+  } catch (error) {
+    console.error("Error fetching page:", error)
+    return NextResponse.json({ success: false, message: "Sayfa getirilirken bir hata oluştu" }, { status: 500 })
+  }
+}
 
 // Belirli bir sayfayı güncelle
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -13,13 +43,14 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const pageId = params.id
 
-    // Sayfanın var olduğunu ve kullanıcıya ait olduğunu kontrol et
-    const existingPage = await getPageById(pageId)
-    if (!existingPage) {
-      return NextResponse.json({ success: false, message: "Sayfa bulunamadı" }, { status: 404 })
+    // Erişim kontrolü
+    const access = await checkPageAccess(pageId, userId)
+    if (!access.hasAccess) {
+      return NextResponse.json({ success: false, message: "Bu sayfaya erişim yetkiniz yok" }, { status: 403 })
     }
 
-    if (existingPage.userId.toString() !== userId) {
+    // Düzenleme yetkisi kontrolü
+    if (access.accessLevel !== "owner" && access.accessLevel !== "edit") {
       return NextResponse.json({ success: false, message: "Bu sayfayı düzenleme yetkiniz yok" }, { status: 403 })
     }
 
@@ -51,13 +82,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     const pageId = params.id
 
-    // Sayfanın var olduğunu ve kullanıcıya ait olduğunu kontrol et
-    const existingPage = await getPageById(pageId)
-    if (!existingPage) {
-      return NextResponse.json({ success: false, message: "Sayfa bulunamadı" }, { status: 404 })
-    }
-
-    if (existingPage.userId.toString() !== userId) {
+    // Erişim kontrolü
+    const access = await checkPageAccess(pageId, userId)
+    if (!access.hasAccess || access.accessLevel !== "owner") {
       return NextResponse.json({ success: false, message: "Bu sayfayı silme yetkiniz yok" }, { status: 403 })
     }
 

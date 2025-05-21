@@ -51,3 +51,15 @@ export async function getMongoDb() {
     throw error
   }
 }
+
+// Koleksiyon erişimi için yardımcı fonksiyon - Eksik olan fonksiyon
+export async function getCollection<T>(collectionName: string) {
+  try {
+    console.log(`Accessing collection: ${collectionName}`)
+    const db = await getMongoDb()
+    return db.collection<T>(collectionName)
+  } catch (error) {
+    console.error(`${collectionName} koleksiyonuna erişim hatası:`, error)
+    throw new Error(`Veritabanı bağlantı hatası: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`)
+  }
+}

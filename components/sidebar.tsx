@@ -82,27 +82,50 @@ export default function Sidebar({
     }
   }, [viewMode, isInitialized])
 
+  // fetchTags fonksiyonunu bileşen dışından içine taşıyalım
+  const fetchTags = async () => {
+    setIsLoadingTags(true)
+    try {
+      const response = await fetch("/api/tags")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          setAvailableTags(data.tags)
+          setFilteredTags(data.tags)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching tags:", error)
+    } finally {
+      setIsLoadingTags(false)
+    }
+  }
+
   // Tüm tag'leri getir
   useEffect(() => {
-    const fetchTags = async () => {
-      setIsLoadingTags(true)
-      try {
-        const response = await fetch("/api/tags")
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            setAvailableTags(data.tags)
-            setFilteredTags(data.tags)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching tags:", error)
-      } finally {
-        setIsLoadingTags(false)
-      }
+    fetchTags()
+  }, []) // fetchTags fonksiyonunu dependency array'e eklemeyin, çünkü içeride tanımladık
+
+  // Tag dropdown açıldığında tag'leri yeniden getir
+  useEffect(() => {
+    if (isTagDropdownOpen) {
+      fetchTags()
+    }
+  }, [isTagDropdownOpen])
+
+  // Yeni tag eklendiğinde tag'leri yeniden getir
+  useEffect(() => {
+    const handleTagAdded = () => {
+      fetchTags()
     }
 
-    fetchTags()
+    // Event listener'ı ekle
+    window.addEventListener("tagAdded", handleTagAdded as EventListener)
+
+    // Cleanup
+    return () => {
+      window.removeEventListener("tagAdded", handleTagAdded as EventListener)
+    }
   }, [])
 
   // Tag input değiştiğinde filtreleme yap
@@ -259,6 +282,7 @@ export default function Sidebar({
     setIsTagDropdownOpen(true)
   }
 
+  // handleTagInputFocus fonksiyonunu güncelleyelim
   const handleTagInputFocus = () => {
     setIsTagDropdownOpen(true)
   }
@@ -469,8 +493,14 @@ export default function Sidebar({
                       <X className="h-3 w-3" />
                     </button>
                   )}
+                  {/* Dropdown açma/kapama butonunu güncelleyelim (yaklaşık 450. satır civarında) */}
                   <button
-                    onClick={() => setIsTagDropdownOpen(!isTagDropdownOpen)}
+                    onClick={() => {
+                      setIsTagDropdownOpen(!isTagDropdownOpen)
+                      if (!isTagDropdownOpen) {
+                        fetchTags() // Dropdown açılırken tag'leri yenile
+                      }
+                    }}
                     className="p-0.5 rounded-full hover:bg-[#79B791]/20 text-[#EDF4ED]/40 hover:text-[#EDF4ED]/70"
                     aria-label="Show tag options"
                   >

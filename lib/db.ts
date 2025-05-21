@@ -1,19 +1,7 @@
 import { ObjectId } from "mongodb"
 import bcrypt from "bcryptjs"
-import { getMongoDb } from "./mongodb"
-import type { User, Page } from "./db-types"
-
-// Koleksiyon erişimi için yardımcı fonksiyon
-async function getCollection<T>(collectionName: string) {
-  try {
-    console.log(`Accessing collection: ${collectionName}`)
-    const db = await getMongoDb()
-    return db.collection<T>(collectionName)
-  } catch (error) {
-    console.error(`${collectionName} koleksiyonuna erişim hatası:`, error)
-    throw new Error(`Veritabanı bağlantı hatası: ${error instanceof Error ? error.message : "Bilinmeyen hata"}`)
-  }
-}
+import { getMongoDb, getCollection } from "./mongodb"
+import type { User, Page, PageShare, Notification } from "./db-types"
 
 // Kullanıcı oluşturma
 export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
@@ -129,6 +117,27 @@ export async function getUserById(id: string): Promise<User | null> {
     return userWithoutPassword as User
   } catch (error) {
     console.error("Error getting user by ID:", error)
+    return null
+  }
+}
+
+// E-posta ile kullanıcı getir
+export async function getUserByEmail(email: string): Promise<User | null> {
+  try {
+    console.log("Getting user by email:", email)
+    const collection = await getCollection<User>("users")
+    const user = await collection.findOne({ email })
+
+    if (!user) {
+      console.log("User not found with email:", email)
+      return null
+    }
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
+  } catch (error) {
+    console.error("Error getting user by email:", error)
     return null
   }
 }
@@ -323,5 +332,112 @@ export async function deleteAllUserPages(userId: string): Promise<boolean> {
   } catch (error) {
     console.error("Error deleting all pages for user:", error)
     return false
+  }
+}
+
+// Sayfa erişim kontrolü
+export async function checkPageAccess(
+  pageId: string,
+  userIdOrEmail: string,
+): Promise<{ hasAccess: boolean; accessLevel?: "owner" | "edit" | "view" }> {
+  try {
+    console.log("Checking page access for:", userIdOrEmail)
+    const db = await getMongoDb()
+
+    // Sayfa bilgilerini getir
+    const page = await db.collection("pages").findOne({ _id: new ObjectId(pageId) })
+
+    if (!page) {
+      return { hasAccess: false }
+    }
+
+    // Kullanıcı sayfanın sahibi mi kontrol et
+    if (page.userId.toString() === userIdOrEmail) {
+      return { hasAccess: true, accessLevel: "owner" }
+    }
+
+    // Kullanıcı ID mi yoksa e-posta mı kontrol et
+    let userEmail: string
+
+    try {
+      // Eğer ObjectId ise, kullanıcı ID'si olarak kabul et
+      new ObjectId(userIdOrEmail)
+
+      // Kullanıcıyı bul
+      const user = await db.collection("users").findOne({ _id: new ObjectId(userIdOrEmail) })
+
+      if (!user) {
+        return { hasAccess: false }
+      }
+
+      userEmail = user.email
+    } catch (e) {
+      // ObjectId değilse, e-posta olarak kabul et
+      userEmail = userIdOrEmail
+    }
+
+    // Paylaşım kontrolü
+    const share = await db.collection("pageShares").findOne({
+      pageId: new ObjectId(pageId),
+      sharedWithEmail: userEmail,
+      status: "accepted",
+    })
+
+    if (share) {
+      return { hasAccess: true, accessLevel: share.accessLevel as "edit" | "view" }
+    }
+
+    return { hasAccess: false }
+  } catch (error) {
+    console.error("Error checking page access:", error)
+    return { hasAccess: false }
+  }
+}
+
+// Sayfa paylaşımlarını getir
+export async function getPageShares(pageId: string): Promise<PageShare[]> {
+  try {
+    console.log("Getting shares for page:", pageId)
+    const db = await getMongoDb()
+
+    const shares = await db
+      .collection("pageShares")
+      .find({ pageId: new ObjectId(pageId) })
+      .toArray()
+
+    return shares as PageShare[]
+  } catch (error) {
+    console.error("Error getting page shares:", error)
+    return []
+  }
+}
+
+// Kullanıcının bildirimlerini getir
+export async function getUserNotifications(userId: string): Promise<Notification[]> {
+  try {
+    console.log("Getting notifications for user:", userId)
+    const db = await getMongoDb()
+
+    // Kullanıcıyı bul
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) })
+
+    if (!user) {
+      return []
+    }
+
+    // Kullanıcının bildirimlerini getir
+    const notifications = await db
+      .collection("notifications")
+      .find({
+        $or: [{ userId: new ObjectId(userId) }, { recipientEmail: user.email }],
+      })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray()
+
+    return notifications as Notification[]
+  } catch (error) {
+    console.error("Error getting user notifications:", error)
+    return []
   }
 }

@@ -108,8 +108,33 @@ export default function AppLayout() {
   }
 
   // Sayfalar arasında gezinme
-  const handleNavigate = (pageId: string) => {
-    setSelectedPageId(pageId)
+  const handleNavigate = async (pageId: string) => {
+    try {
+      // Sayfa erişim kontrolü
+      const response = await fetch(`/api/pages/${pageId}`)
+
+      if (response.ok) {
+        const data = await response.json()
+
+        if (data.success) {
+          setSelectedPageId(pageId)
+
+          // Erişim seviyesine göre UI'ı güncelle
+          if (data.accessLevel === "view") {
+            // Salt okunur mod
+            // Burada düzenleme butonlarını devre dışı bırakabilirsiniz
+            console.log("View-only access")
+          }
+        } else {
+          console.error("Failed to access page:", data.message)
+          alert("Bu sayfaya erişim yetkiniz yok.")
+        }
+      } else {
+        console.error("Failed to check page access")
+      }
+    } catch (error) {
+      console.error("Error navigating to page:", error)
+    }
   }
 
   // Favori durumunu değiştirme
