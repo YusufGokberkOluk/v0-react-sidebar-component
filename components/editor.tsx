@@ -49,6 +49,7 @@ interface EditorProps {
   saveStatus?: SaveStatus
   onChange?: (content: string) => void
   onTagsChange?: (tags: string[]) => void
+  onTitleChange?: (title: string) => void
   loading?: boolean
 }
 
@@ -60,9 +61,11 @@ export default function Editor({
   saveStatus = "idle",
   onChange,
   onTagsChange,
+  onTitleChange,
   loading = false,
 }: EditorProps) {
   const [content, setContent] = useState(initialContent)
+  const [pageTitle, setPageTitle] = useState(title)
   const [tags, setTags] = useState<string[]>(initialTags)
   const [newTag, setNewTag] = useState("")
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
@@ -78,6 +81,10 @@ export default function Editor({
   useEffect(() => {
     setTags(initialTags)
   }, [initialTags])
+
+  useEffect(() => {
+    setPageTitle(title)
+  }, [title])
 
   // Handle save status changes
   useEffect(() => {
@@ -96,6 +103,20 @@ export default function Editor({
     setContent(newContent)
     setHasUnsavedChanges(true)
     onChange?.(newContent)
+  }
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newTitle = e.target.value
+    setPageTitle(newTitle)
+    setHasUnsavedChanges(true)
+    onTitleChange?.(newTitle)
+  }
+
+  const handleTitleBlur = () => {
+    if (pageTitle.trim() === "") {
+      setPageTitle("Untitled")
+      onTitleChange?.("Untitled")
+    }
   }
 
   const handleUndo = () => {
@@ -280,9 +301,10 @@ export default function Editor({
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#ABD1B5]/20 max-w-4xl mx-auto w-full">
         <input
           type="text"
-          value={title}
-          readOnly
-          className="text-xl font-medium bg-transparent border-none focus:outline-none w-full"
+          value={pageTitle}
+          onChange={handleTitleChange}
+          onBlur={handleTitleBlur}
+          className="text-xl font-medium bg-transparent border-none focus:outline-none focus:ring-1 focus:ring-[#79B791]/30 rounded px-1 -ml-1 w-full"
           placeholder="Untitled"
         />
         <div className="flex items-center space-x-3">
@@ -490,7 +512,7 @@ export default function Editor({
         onChange={handleChange}
         className="flex-1 w-full p-4 text-[#13262F] bg-white resize-none focus:outline-none focus:ring-0 border-0 max-w-4xl mx-auto"
         placeholder="Type '/' for commands"
-        aria-label={`Edit ${title}`}
+        aria-label={`Edit ${pageTitle}`}
         aria-describedby={saveStatus === "error" ? "save-error" : undefined}
       />
 

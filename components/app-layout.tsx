@@ -136,6 +136,17 @@ export default function AppLayout() {
     }
   }
 
+  // Başlık değişikliklerini işleme
+  const handleTitleChange = (newTitle: string) => {
+    if (selectedPageId && selectedPage) {
+      // Kullanıcı arayüzünü hemen güncelle
+      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, title: newTitle } : page)))
+
+      // Otomatik kaydetmeyi tetikle
+      triggerSave(selectedPageId, { title: newTitle })
+    }
+  }
+
   // Etiket değişikliklerini işleme
   const handleTagsChange = (newTags: string[]) => {
     if (selectedPageId && selectedPage) {
@@ -239,6 +250,7 @@ export default function AppLayout() {
             saveStatus={saveStatus}
             onChange={handleContentChange}
             onTagsChange={handleTagsChange}
+            onTitleChange={handleTitleChange}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-[#13262F]/70">
