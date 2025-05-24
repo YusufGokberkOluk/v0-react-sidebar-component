@@ -32,7 +32,7 @@ export async function GET() {
       return NextResponse.json({
         success: true,
         user: {
-          id: user._id.toString(),
+          id: user._id?.toString(),
           name: user.name,
           email: user.email,
         },
