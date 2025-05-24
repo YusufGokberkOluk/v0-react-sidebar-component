@@ -62,3 +62,38 @@ export async function getServerSideAuth(): Promise<string | null> {
     return null
   }
 }
+
+// HTTP request'inden kullanıcı bilgilerini al
+export async function getUserFromRequest(req: NextRequest): Promise<any | null> {
+  try {
+    // Cookie'den token al
+    const token = req.cookies.get("token")?.value
+
+    if (!token) {
+      console.log("No token found in cookies")
+      return null
+    }
+
+    // Token'ı doğrula
+    const userId = verifyJwtToken(token)
+
+    if (!userId) {
+      console.log("Invalid token")
+      return null
+    }
+
+    // Veritabanından kullanıcı bilgilerini getir
+    const { getUserById } = await import("@/lib/db")
+    const user = await getUserById(userId)
+
+    if (!user) {
+      console.log("User not found in database")
+      return null
+    }
+
+    return user
+  } catch (error) {
+    console.error("getUserFromRequest error:", error)
+    return null
+  }
+}
