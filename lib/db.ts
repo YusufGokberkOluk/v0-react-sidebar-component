@@ -611,7 +611,3 @@ export async function getUserNotifications(userId: string): Promise<Notification
     return []
   }
 }
-
-// Workspace ile ilgili fonksiyonları export edelim
-export * from "./users"
-export * from "./pages"
