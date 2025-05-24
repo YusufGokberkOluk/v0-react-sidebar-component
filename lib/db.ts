@@ -176,54 +176,21 @@ export async function updateUser(id: string, updateData: Partial<User>): Promise
   }
 }
 
-// Kullanıcıyı sil - tüm verilerle birlikte
+// Kullanıcıyı sil
 export async function deleteUser(id: string): Promise<boolean> {
   try {
     console.log("Deleting user with ID:", id)
-    const db = await getMongoDb()
+    const collection = await getCollection<User>("users")
+    const result = await collection.deleteOne({ _id: new ObjectId(id) })
 
-    // Önce kullanıcının var olup olmadığını kontrol et
-    const user = await db.collection("users").findOne({ _id: new ObjectId(id) })
-    if (!user) {
+    if (result.deletedCount === 0) {
       console.log("User not found with ID:", id)
       return false
     }
 
-    // 1. Kullanıcının tüm sayfalarını sil
-    await db.collection("pages").deleteMany({ userId: id })
-    console.log("Deleted all pages for user:", id)
+    // Kullanıcının tüm sayfalarını da sil
+    await deleteAllUserPages(id)
 
-    // 2. Kullanıcının tüm sayfa paylaşımlarını sil
-    await db.collection("pageShares").deleteMany({
-      $or: [{ sharedByUserId: new ObjectId(id) }, { sharedWithEmail: user.email }],
-    })
-    console.log("Deleted all page shares for user:", id)
-
-    // 3. Kullanıcının tüm bildirimlerini sil
-    await db.collection("notifications").deleteMany({
-      $or: [{ userId: new ObjectId(id) }, { recipientEmail: user.email }],
-    })
-    console.log("Deleted all notifications for user:", id)
-
-    // 4. Kullanıcının workspace'lerini sil (eğer varsa)
-    await db.collection("workspaces").deleteMany({ ownerId: new ObjectId(id) })
-    console.log("Deleted all workspaces for user:", id)
-
-    // 5. Kullanıcının workspace paylaşımlarını sil (eğer varsa)
-    await db.collection("workspaceShares").deleteMany({
-      $or: [{ sharedByUserId: new ObjectId(id) }, { sharedWithEmail: user.email }],
-    })
-    console.log("Deleted all workspace shares for user:", id)
-
-    // 6. Son olarak kullanıcıyı sil
-    const result = await db.collection("users").deleteOne({ _id: new ObjectId(id) })
-
-    if (result.deletedCount === 0) {
-      console.log("Failed to delete user with ID:", id)
-      return false
-    }
-
-    console.log("Successfully deleted user and all associated data:", id)
     return true
   } catch (error) {
     console.error("Error deleting user:", error)
