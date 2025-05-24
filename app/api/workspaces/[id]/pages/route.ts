@@ -12,11 +12,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     const workspaceId = params.id
 
     // Workspace erişim kontrolü
-    const access = await checkWorkspaceAccess(workspaceId, user._id as string)
+    const access = await checkWorkspaceAccess(workspaceId, user._id)
     if (!access.hasAccess) {
       return NextResponse.json({ success: false, message: "Access denied" }, { status: 403 })
     }
 
+    // Workspace'e ait sayfaları getir
     const pages = await getWorkspacePages(workspaceId)
     return NextResponse.json({ success: true, pages })
   } catch (error) {
