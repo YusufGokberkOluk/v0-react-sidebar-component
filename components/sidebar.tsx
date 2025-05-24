@@ -593,10 +593,11 @@ export default function Sidebar({
 
         <button
           onClick={handleCreateNewPage}
-          className="flex items-center w-full p-1.5 mb-3 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
+          disabled={isLoading}
+          className="flex items-center w-full p-1.5 mb-3 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-4 w-4 mr-1.5 text-[#79B791]" />
-          New Page
+          {isLoading ? "Creating..." : "New Page"}
         </button>
 
         {/* Yükleniyor Durumu */}

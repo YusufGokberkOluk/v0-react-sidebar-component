@@ -24,38 +24,39 @@ export default function AppLayout() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
   const [saveTimer, setSaveTimer] = useState<NodeJS.Timeout | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isCreatingPage, setIsCreatingPage] = useState(false) // Yeni sayfa oluşturma durumu
   const router = useRouter()
 
   // Kullanıcının sayfalarını getir
-  useEffect(() => {
-    async function fetchPages() {
-      try {
-        setIsLoading(true)
-        const response = await fetch("/api/pages")
+  const fetchPages = async () => {
+    try {
+      setIsLoading(true)
+      const response = await fetch("/api/pages")
 
-        if (!response.ok) {
-          if (response.status === 401) {
-            // Kullanıcı giriş yapmamış, giriş sayfasına yönlendir
-            router.push("/sign-in")
-            return
-          }
-          throw new Error("Failed to fetch pages")
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Kullanıcı giriş yapmamış, giriş sayfasına yönlendir
+          router.push("/sign-in")
+          return
         }
-
-        const data = await response.json()
-        setPages(data.pages)
-
-        // İlk sayfayı seç (eğer sayfa varsa)
-        if (data.pages.length > 0) {
-          setSelectedPageId(data.pages[0]._id)
-        }
-      } catch (error) {
-        console.error("Error fetching pages:", error)
-      } finally {
-        setIsLoading(false)
+        throw new Error("Failed to fetch pages")
       }
-    }
 
+      const data = await response.json()
+      setPages(data.pages)
+
+      // İlk sayfayı seç (eğer sayfa varsa ve hiçbiri seçili değilse)
+      if (data.pages.length > 0 && !selectedPageId) {
+        setSelectedPageId(data.pages[0]._id)
+      }
+    } catch (error) {
+      console.error("Error fetching pages:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchPages()
   }, [router])
 
@@ -82,7 +83,7 @@ export default function AppLayout() {
       const data = await response.json()
 
       // Sayfalar listesini güncelle
-      setPages(pages.map((page) => (page._id === pageId ? { ...page, ...data.page } : page)))
+      setPages((prevPages) => prevPages.map((page) => (page._id === pageId ? { ...page, ...data.page } : page)))
 
       setSaveStatus("saved")
     } catch (error) {
@@ -143,7 +144,7 @@ export default function AppLayout() {
 
     if (page) {
       // Kullanıcı arayüzünü hemen güncelle (optimistik güncelleme)
-      setPages(pages.map((p) => (p._id === pageId ? { ...p, isFavorite: !p.isFavorite } : p)))
+      setPages((prevPages) => prevPages.map((p) => (p._id === pageId ? { ...p, isFavorite: !p.isFavorite } : p)))
 
       // Veritabanını güncelle
       await savePage(pageId, { isFavorite: !page.isFavorite })
@@ -154,7 +155,9 @@ export default function AppLayout() {
   const handleContentChange = (newContent: string) => {
     if (selectedPageId && selectedPage) {
       // Kullanıcı arayüzünü hemen güncelle
-      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, content: newContent } : page)))
+      setPages((prevPages) =>
+        prevPages.map((page) => (page._id === selectedPageId ? { ...page, content: newContent } : page)),
+      )
 
       // Otomatik kaydetmeyi tetikle
       triggerSave(selectedPageId, { content: newContent })
@@ -165,7 +168,9 @@ export default function AppLayout() {
   const handleTitleChange = (newTitle: string) => {
     if (selectedPageId && selectedPage) {
       // Kullanıcı arayüzünü hemen güncelle
-      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, title: newTitle } : page)))
+      setPages((prevPages) =>
+        prevPages.map((page) => (page._id === selectedPageId ? { ...page, title: newTitle } : page)),
+      )
 
       // Otomatik kaydetmeyi tetikle
       triggerSave(selectedPageId, { title: newTitle })
@@ -176,15 +181,24 @@ export default function AppLayout() {
   const handleTagsChange = (newTags: string[]) => {
     if (selectedPageId && selectedPage) {
       // Kullanıcı arayüzünü hemen güncelle
-      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, tags: newTags } : page)))
+      setPages((prevPages) =>
+        prevPages.map((page) => (page._id === selectedPageId ? { ...page, tags: newTags } : page)),
+      )
 
       // Otomatik kaydetmeyi tetikle
       triggerSave(selectedPageId, { tags: newTags })
     }
   }
 
-  // Yeni sayfa oluşturma
+  // Yeni sayfa oluşturma - race condition'ı önlemek için düzeltildi
   const handleCreatePage = async () => {
+    // Eğer zaten sayfa oluşturuluyorsa, işlemi engelle
+    if (isCreatingPage) {
+      return
+    }
+
+    setIsCreatingPage(true)
+
     try {
       const response = await fetch("/api/pages", {
         method: "POST",
@@ -205,13 +219,26 @@ export default function AppLayout() {
 
       const data = await response.json()
 
-      // Yeni sayfayı listeye ekle
-      setPages([...pages, data.page])
+      // Yeni sayfayı listeye ekle - functional update kullan
+      setPages((prevPages) => {
+        // Aynı ID'ye sahip sayfa zaten varsa ekleme
+        if (prevPages.some((page) => page._id === data.page._id)) {
+          return prevPages
+        }
+        return [...prevPages, data.page]
+      })
 
       // Yeni sayfayı seç
       setSelectedPageId(data.page._id)
+
+      // Sayfaları yeniden getir (senkronizasyon için)
+      setTimeout(() => {
+        fetchPages()
+      }, 500)
     } catch (error) {
       console.error("Error creating page:", error)
+    } finally {
+      setIsCreatingPage(false)
     }
   }
 
@@ -227,12 +254,15 @@ export default function AppLayout() {
       }
 
       // Sayfayı listeden kaldır
-      setPages(pages.filter((page) => page._id !== pageId))
+      setPages((prevPages) => prevPages.filter((page) => page._id !== pageId))
 
       // Eğer silinen sayfa seçili sayfaysa, başka bir sayfayı seç
       if (selectedPageId === pageId) {
-        const remainingPages = pages.filter((page) => page._id !== pageId)
-        setSelectedPageId(remainingPages.length > 0 ? remainingPages[0]._id : null)
+        setPages((prevPages) => {
+          const remainingPages = prevPages.filter((page) => page._id !== pageId)
+          setSelectedPageId(remainingPages.length > 0 ? remainingPages[0]._id : null)
+          return remainingPages
+        })
       }
     } catch (error) {
       console.error("Error deleting page:", error)
@@ -282,9 +312,10 @@ export default function AppLayout() {
             <p className="mb-4">Henüz hiç sayfa yok.</p>
             <button
               onClick={handleCreatePage}
-              className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#79B791]/90 transition-colors"
+              disabled={isCreatingPage}
+              className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#79B791]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Yeni Sayfa Oluştur
+              {isCreatingPage ? "Oluşturuluyor..." : "Yeni Sayfa Oluştur"}
             </button>
           </div>
         )}
