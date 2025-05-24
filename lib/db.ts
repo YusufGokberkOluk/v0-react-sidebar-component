@@ -176,21 +176,44 @@ export async function updateUser(id: string, updateData: Partial<User>): Promise
   }
 }
 
-// Kullanıcıyı sil
+// Kullanıcıyı ve tüm verilerini sil
 export async function deleteUser(id: string): Promise<boolean> {
   try {
     console.log("Deleting user with ID:", id)
-    const collection = await getCollection<User>("users")
-    const result = await collection.deleteOne({ _id: new ObjectId(id) })
+    const db = await getMongoDb()
 
-    if (result.deletedCount === 0) {
+    // Önce kullanıcının var olup olmadığını kontrol et
+    const user = await db.collection("users").findOne({ _id: new ObjectId(id) })
+    if (!user) {
       console.log("User not found with ID:", id)
       return false
     }
 
-    // Kullanıcının tüm sayfalarını da sil
-    await deleteAllUserPages(id)
+    // 1. Kullanıcının tüm sayfalarını sil
+    const pagesResult = await db.collection("pages").deleteMany({ userId: id })
+    console.log(`Deleted ${pagesResult.deletedCount} pages for user:`, id)
 
+    // 2. Kullanıcının tüm sayfa paylaşımlarını sil
+    const sharesResult = await db.collection("pageShares").deleteMany({
+      $or: [{ sharedByUserId: new ObjectId(id) }, { sharedWithEmail: user.email }],
+    })
+    console.log(`Deleted ${sharesResult.deletedCount} page shares for user:`, id)
+
+    // 3. Kullanıcının tüm bildirimlerini sil
+    const notificationsResult = await db.collection("notifications").deleteMany({
+      $or: [{ userId: new ObjectId(id) }, { recipientEmail: user.email }],
+    })
+    console.log(`Deleted ${notificationsResult.deletedCount} notifications for user:`, id)
+
+    // 4. Son olarak kullanıcıyı sil
+    const userResult = await db.collection("users").deleteOne({ _id: new ObjectId(id) })
+
+    if (userResult.deletedCount === 0) {
+      console.log("Failed to delete user with ID:", id)
+      return false
+    }
+
+    console.log("Successfully deleted user and all associated data:", id)
     return true
   } catch (error) {
     console.error("Error deleting user:", error)
