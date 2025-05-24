@@ -10,48 +10,34 @@ export default function SignInForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRedirecting, setIsRedirecting] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
 
-  // Sadece bir kez auth kontrolü yap
+  // Check if user is already logged in
   useEffect(() => {
-    let isMounted = true
-
     const checkAuth = async () => {
+      if (authChecked) return // Prevent multiple checks
+
       try {
         console.log("Checking if already logged in...")
-        const res = await fetch("/api/user", {
-          method: "GET",
-          credentials: "include",
-        })
-
-        if (isMounted) {
-          if (res.ok) {
-            console.log("Already logged in, redirecting to app")
-            router.replace("/app")
-          } else {
-            console.log("Not logged in, showing sign-in form")
-            setAuthChecked(true)
-          }
+        const res = await fetch("/api/user")
+        if (res.ok) {
+          console.log("Already logged in, redirecting to app")
+          router.push("/app")
         }
       } catch (error) {
         console.error("Auth check error:", error)
-        if (isMounted) {
-          setAuthChecked(true)
-        }
+      } finally {
+        setAuthChecked(true)
       }
     }
 
     checkAuth()
-
-    return () => {
-      isMounted = false
-    }
-  }, [router])
+  }, [router, authChecked])
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
-    console.log("Sign in attempt", { email })
+    console.log("Sign in attempt", { email, password })
 
     setError("")
 
@@ -61,14 +47,13 @@ export default function SignInForm() {
     }
 
     try {
-      setIsSubmitting(true)
+      setIsRedirecting(true)
 
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({ email, password }),
       })
 
@@ -76,21 +61,28 @@ export default function SignInForm() {
 
       if (response.ok && data.success) {
         console.log("Login successful!")
-        // Başarılı giriş sonrası app sayfasına yönlendir
-        router.replace("/app")
+
+        // Kısa bir gecikme ekle
+        setTimeout(() => {
+          // Redirect to app
+          router.push("/app")
+        }, 500)
       } else {
         console.log("Login failed:", data.message)
         setError(data.message || "Geçersiz e-posta veya şifre. Lütfen tekrar deneyin.")
+        setIsRedirecting(false)
       }
     } catch (error) {
       console.error("Login error:", error)
       setError("Giriş sırasında bir hata oluştu. Lütfen tekrar deneyin.")
-    } finally {
-      setIsSubmitting(false)
+      setIsRedirecting(false)
     }
   }
 
-  // Auth kontrolü tamamlanana kadar loading göster
+  const handleForgotPassword = () => {
+    console.log("Navigate to Forgot Password")
+  }
+
   if (!authChecked) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#f8faf8]">
@@ -140,6 +132,13 @@ export default function SignInForm() {
                 <label htmlFor="password" className="block text-sm font-medium text-[#13262F]/80">
                   Password
                 </label>
+                <button
+                  type="button"
+                  onClick={handleForgotPassword}
+                  className="text-xs font-medium text-[#79B791] hover:text-[#ABD1B5] focus:outline-none"
+                >
+                  Forgot password?
+                </button>
               </div>
               <input
                 id="password"
@@ -158,10 +157,10 @@ export default function SignInForm() {
           <div>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isRedirecting}
               className="w-full px-4 py-2.5 text-white bg-[#79B791] rounded-md hover:bg-[#ABD1B5] focus:outline-none focus:ring-2 focus:ring-[#79B791] focus:ring-offset-2 transition-colors duration-200 text-sm font-medium disabled:opacity-70"
             >
-              {isSubmitting ? (
+              {isRedirecting ? (
                 <span className="flex items-center justify-center">
                   <svg
                     className="animate-spin -ml-1 mr-2 h-4 w-4 text-white"

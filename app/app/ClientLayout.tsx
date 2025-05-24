@@ -11,50 +11,36 @@ export default function ClientLayout({
 }) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
 
-  // Auth kontrolü - sadece bir kez çalışsın
+  // Check if user is logged in
   useEffect(() => {
-    let isMounted = true
-
     const checkAuth = async () => {
+      if (authChecked) return // Prevent multiple checks
+
       try {
         console.log("Checking authentication...")
-        const res = await fetch("/api/user", {
-          method: "GET",
-          credentials: "include",
-        })
+        const res = await fetch("/api/user")
 
-        if (isMounted) {
-          if (res.ok) {
-            console.log("Auth check successful")
-            setIsAuthenticated(true)
-            setIsLoading(false)
-          } else {
-            console.log("Auth check failed, redirecting to sign-in")
-            setIsAuthenticated(false)
-            setIsLoading(false)
-            router.replace("/sign-in")
-          }
+        if (!res.ok) {
+          console.log("Auth check failed, status:", res.status)
+          router.push("/sign-in")
+        } else {
+          console.log("Auth check successful")
+          setIsLoading(false)
         }
       } catch (error) {
         console.error("Auth check error:", error)
-        if (isMounted) {
-          setIsAuthenticated(false)
-          setIsLoading(false)
-          router.replace("/sign-in")
-        }
+        router.push("/sign-in")
+      } finally {
+        setAuthChecked(true)
       }
     }
 
     checkAuth()
+  }, [router, authChecked])
 
-    return () => {
-      isMounted = false
-    }
-  }, [router])
-
-  if (isLoading) {
+  if (isLoading && authChecked) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-[#f8faf8]">
         <div className="flex flex-col items-center">
@@ -63,10 +49,6 @@ export default function ClientLayout({
         </div>
       </div>
     )
-  }
-
-  if (!isAuthenticated) {
-    return null // Router.replace çalışırken hiçbir şey gösterme
   }
 
   return <>{children}</>

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server"
 import jwt from "jsonwebtoken"
 import { cookies } from "next/headers"
 
-const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
 
 // JWT token oluştur
 export function createJwtToken(userId: string): string {
@@ -59,41 +59,6 @@ export async function getServerSideAuth(): Promise<string | null> {
     return verifyJwtToken(token)
   } catch (error) {
     console.error("Server-side auth error:", error)
-    return null
-  }
-}
-
-// HTTP request'inden kullanıcı bilgilerini al - EKSİK OLAN FONKSİYON
-export async function getUserFromRequest(req: NextRequest): Promise<any | null> {
-  try {
-    // Cookie'den token al
-    const token = req.cookies.get("token")?.value
-
-    if (!token) {
-      console.log("No token found in cookies")
-      return null
-    }
-
-    // Token'ı doğrula
-    const userId = verifyJwtToken(token)
-
-    if (!userId) {
-      console.log("Invalid token")
-      return null
-    }
-
-    // Veritabanından kullanıcı bilgilerini getir
-    const { getUserById } = await import("@/lib/db")
-    const user = await getUserById(userId)
-
-    if (!user) {
-      console.log("User not found in database")
-      return null
-    }
-
-    return user
-  } catch (error) {
-    console.error("getUserFromRequest error:", error)
     return null
   }
 }
