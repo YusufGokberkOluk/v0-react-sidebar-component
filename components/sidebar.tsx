@@ -24,15 +24,30 @@ interface Page {
   isFavorite: boolean
   content?: string
   tags?: string[]
+  workspaceId: string
 }
 
+// Workspace tipi tanımı
+interface Workspace {
+  _id: string
+  name: string
+  ownerId: string
+  isDefault: boolean
+  createdAt: string
+}
+
+// Sidebar props'una workspace'leri ekleyin
 interface SidebarProps {
   pages: Page[]
   selectedPageId?: string
+  workspaces: Workspace[] // Workspace'leri ekleyin
+  selectedWorkspaceId?: string // Seçili workspace ID'sini ekleyin
   onNavigate?: (pageId: string) => void
   onToggleFavorite?: (pageId: string) => void
   onCreatePage?: () => void
   onDeletePage?: (pageId: string) => void
+  onSelectWorkspace?: (workspaceId: string) => void // Workspace seçimi için fonksiyon ekleyin
+  onCreateWorkspace?: () => void // Yeni workspace oluşturma fonksiyonu ekleyin
   isLoading?: boolean
 }
 
@@ -42,17 +57,20 @@ type SearchMode = "title" | "tag"
 export default function Sidebar({
   pages = [],
   selectedPageId,
+  workspaces = [], // Varsayılan boş dizi
+  selectedWorkspaceId,
   onNavigate,
   onToggleFavorite,
   onCreatePage,
   onDeletePage,
+  onSelectWorkspace,
+  onCreateWorkspace,
   isLoading = false,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState("")
   const [tagSearchQuery, setTagSearchQuery] = useState("")
   const [isFilteringFavorites, setIsFilteringFavorites] = useState(false)
   const [isWorkspaceDropdownOpen, setIsWorkspaceDropdownOpen] = useState(false)
-  const [currentWorkspace, setCurrentWorkspace] = useState("My Workspace")
   const [viewMode, setViewMode] = useState<ViewMode>("list")
   const [isInitialized, setIsInitialized] = useState(false)
   const [searchMode, setSearchMode] = useState<SearchMode>("title")
@@ -65,6 +83,11 @@ export default function Sidebar({
   const tagInputRef = useRef<HTMLInputElement>(null)
   const tagDropdownRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
+
+  // Seçili workspace'i bul
+  const selectedWorkspace = useMemo(() => {
+    return workspaces.find((workspace) => workspace._id === selectedWorkspaceId) || workspaces[0]
+  }, [workspaces, selectedWorkspaceId])
 
   // localStorage'dan görünüm modunu yükle
   useEffect(() => {
@@ -170,9 +193,6 @@ export default function Sidebar({
     }
   }, [])
 
-  // Örnek çalışma alanları
-  const workspaces = ["My Workspace", "Project X", "Personal"]
-
   // Tag ile arama yapma fonksiyonu
   const searchByTag = async (tag: string) => {
     if (!tag.trim()) {
@@ -216,21 +236,27 @@ export default function Sidebar({
 
   // Arama sorgusu ve favori filtresine göre sayfaları filtrele
   const filteredPages = useMemo(() => {
+    // Önce seçili workspace'e ait sayfaları filtrele
+    const workspacePages = selectedWorkspaceId
+      ? pages.filter((page) => page.workspaceId === selectedWorkspaceId)
+      : pages
+
     // Tag araması yapılıyorsa ve sonuçlar varsa, onları göster
     if (searchMode === "tag" && tagSearchQuery.trim() !== "") {
       return searchResults.filter((page) => {
         const matchesFavorite = isFilteringFavorites ? page.isFavorite : true
-        return matchesFavorite
+        const matchesWorkspace = selectedWorkspaceId ? page.workspaceId === selectedWorkspaceId : true
+        return matchesFavorite && matchesWorkspace
       })
     }
 
     // Normal başlık araması
-    return pages.filter((page) => {
+    return workspacePages.filter((page) => {
       const matchesSearch = page.title.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesFavorite = isFilteringFavorites ? page.isFavorite : true
       return matchesSearch && matchesFavorite
     })
-  }, [pages, searchQuery, isFilteringFavorites, searchMode, tagSearchQuery, searchResults])
+  }, [pages, searchQuery, isFilteringFavorites, searchMode, tagSearchQuery, searchResults, selectedWorkspaceId])
 
   const handleNavigate = (pageId: string) => {
     onNavigate?.(pageId)
@@ -345,18 +371,32 @@ export default function Sidebar({
     setIsFilteringFavorites(!isFilteringFavorites)
   }
 
+  // Workspace dropdown'ını aç/kapat
   const toggleWorkspaceDropdown = () => {
     setIsWorkspaceDropdownOpen(!isWorkspaceDropdownOpen)
   }
 
-  const handleSwitchWorkspace = (workspace: string) => {
-    setCurrentWorkspace(workspace)
+  // Workspace seçimi
+  const handleSwitchWorkspace = (workspaceId: string) => {
+    onSelectWorkspace?.(workspaceId)
     setIsWorkspaceDropdownOpen(false)
   }
 
+  // Yeni workspace oluştur
   const handleCreateWorkspace = () => {
-    console.log("Open Create Workspace modal")
+    onCreateWorkspace?.()
     setIsWorkspaceDropdownOpen(false)
+  }
+
+  // Workspace adından ilk harfi al
+  const getWorkspaceInitial = (name: string) => {
+    return name.charAt(0).toUpperCase()
+  }
+
+  // Workspace sahibinin adını göster
+  const getWorkspaceOwnerName = (workspace: Workspace) => {
+    // Workspace adı zaten "Kullanıcı's etude" formatında ise, direkt göster
+    return workspace.name
   }
 
   const handleSetViewMode = (mode: ViewMode) => {
@@ -384,9 +424,11 @@ export default function Sidebar({
         >
           <div className="flex items-center">
             <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-              {currentWorkspace.charAt(0)}
+              {selectedWorkspace ? getWorkspaceInitial(selectedWorkspace.name) : "W"}
             </div>
-            <span className="font-medium truncate text-sm">{currentWorkspace}</span>
+            <span className="font-medium truncate text-sm">
+              {selectedWorkspace ? selectedWorkspace.name : "Workspace"}
+            </span>
           </div>
           <ChevronDown
             className={`h-4 w-4 transition-transform duration-200 ${isWorkspaceDropdownOpen ? "rotate-180" : ""}`}
@@ -399,15 +441,15 @@ export default function Sidebar({
               <p className="px-3 py-1 text-xs text-[#EDF4ED]/50 font-medium">WORKSPACES</p>
               {workspaces.map((workspace) => (
                 <button
-                  key={workspace}
-                  onClick={() => handleSwitchWorkspace(workspace)}
+                  key={workspace._id}
+                  onClick={() => handleSwitchWorkspace(workspace._id)}
                   className="flex items-center w-full px-3 py-1.5 text-sm hover:bg-[#ABD1B5]/10 transition-all duration-200"
                 >
                   <div className="w-5 h-5 rounded bg-[#79B791] mr-2 flex items-center justify-center text-xs font-medium text-white">
-                    {workspace.charAt(0)}
+                    {getWorkspaceInitial(workspace.name)}
                   </div>
-                  <span>{workspace}</span>
-                  {workspace === currentWorkspace && <Check className="h-4 w-4 ml-auto text-[#ABD1B5]" />}
+                  <span className="truncate">{getWorkspaceOwnerName(workspace)}</span>
+                  {workspace._id === selectedWorkspaceId && <Check className="h-4 w-4 ml-auto text-[#ABD1B5]" />}
                 </button>
               ))}
             </div>
@@ -593,7 +635,8 @@ export default function Sidebar({
 
         <button
           onClick={handleCreateNewPage}
-          className="flex items-center w-full p-1.5 mb-3 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
+          disabled={!selectedWorkspaceId}
+          className="flex items-center w-full p-1.5 mb-3 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-4 w-4 mr-1.5 text-[#79B791]" />
           New Page
@@ -645,19 +688,24 @@ export default function Sidebar({
                       Show all pages
                     </button>
                   </>
+                ) : !selectedWorkspaceId ? (
+                  <>
+                    <FolderPlus className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
+                    <p className="text-sm text-[#EDF4ED]/60">Select a workspace to see pages</p>
+                  </>
                 ) : (
                   <>
                     <Search className="h-10 w-10 text-[#EDF4ED]/20 mx-auto mb-2" />
-                    <p className="text-sm text-[#EDF4ED]/60">No pages found</p>
+                    <p className="text-sm text-[#EDF4ED]/60">No pages found in this workspace</p>
+                    <button
+                      onClick={handleCreateNewPage}
+                      className="mt-4 flex items-center justify-center mx-auto px-3 py-1.5 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />
+                      Create new page
+                    </button>
                   </>
                 )}
-                <button
-                  onClick={handleCreateNewPage}
-                  className="mt-4 flex items-center justify-center mx-auto px-3 py-1.5 rounded-md bg-[#79B791]/20 text-[#EDF4ED] hover:bg-[#79B791]/30 transition-all duration-200 text-sm"
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1.5" />
-                  Create new page
-                </button>
               </div>
             )}
 
