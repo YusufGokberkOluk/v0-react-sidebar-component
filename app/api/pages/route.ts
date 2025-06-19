@@ -7,27 +7,55 @@ import { getCache, setCache, deleteCache } from "@/lib/redis"
 // Kullanıcının sayfalarını getir
 export async function GET(req: NextRequest) {
   try {
+    console.log("API: Getting pages...")
+
     // Kullanıcı kimliğini doğrula
     const userId = await verifyAuth(req)
+    console.log("API: User ID:", userId)
+
     if (!userId) {
+      console.log("API: No user ID, unauthorized")
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
     }
 
-    // Kullanıcının sayfalarını getir
-    const cacheKey = `user_pages:${userId}`
-    const cachedPages = await getCache(cacheKey)
+    // Redis cache kontrolü (hata durumunda devam et)
+    let cachedPages = null
+    try {
+      const cacheKey = `user_pages:${userId}`
+      cachedPages = await getCache(cacheKey)
+      console.log("API: Cache result:", cachedPages ? "found" : "not found")
+    } catch (cacheError) {
+      console.log("API: Cache error (continuing):", cacheError)
+    }
 
     if (cachedPages) {
       return NextResponse.json({ success: true, pages: cachedPages })
     }
 
+    // Kullanıcının sayfalarını getir
+    console.log("API: Fetching from database...")
     const pages = await getUserPages(userId)
-    await setCache(cacheKey, pages, 300) // 5 minutes cache
+    console.log("API: Found pages:", pages.length)
+
+    // Cache'e kaydet (hata durumunda devam et)
+    try {
+      const cacheKey = `user_pages:${userId}`
+      await setCache(cacheKey, pages, 300)
+    } catch (cacheError) {
+      console.log("API: Cache set error (continuing):", cacheError)
+    }
 
     return NextResponse.json({ success: true, pages })
   } catch (error) {
-    console.error("Error fetching pages:", error)
-    return NextResponse.json({ success: false, message: "Sayfalar getirilirken bir hata oluştu" }, { status: 500 })
+    console.error("API: Error fetching pages:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Sayfalar getirilirken bir hata oluştu",
+        error: error.message,
+      },
+      { status: 500 },
+    )
   }
 }
 

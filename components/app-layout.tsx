@@ -31,26 +31,34 @@ export default function AppLayout() {
     async function fetchPages() {
       try {
         setIsLoading(true)
+        console.log("Fetching pages...")
+
         const response = await fetch("/api/pages")
+        console.log("Response status:", response.status)
 
         if (!response.ok) {
           if (response.status === 401) {
-            // Kullanıcı giriş yapmamış, giriş sayfasına yönlendir
+            console.log("Unauthorized, redirecting to sign-in")
             router.push("/sign-in")
             return
           }
+          console.error("Response not ok:", response.status, response.statusText)
           throw new Error("Failed to fetch pages")
         }
 
         const data = await response.json()
-        setPages(data.pages)
+        console.log("Fetched data:", data)
+
+        setPages(data.pages || [])
 
         // İlk sayfayı seç (eğer sayfa varsa)
-        if (data.pages.length > 0) {
+        if (data.pages && data.pages.length > 0) {
           setSelectedPageId(data.pages[0]._id)
         }
       } catch (error) {
         console.error("Error fetching pages:", error)
+        // Hata durumunda boş array set et
+        setPages([])
       } finally {
         setIsLoading(false)
       }
