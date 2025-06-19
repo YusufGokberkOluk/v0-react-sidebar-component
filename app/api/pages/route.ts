@@ -1,8 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createPage, getUserPages } from "@/lib/db"
 import { verifyAuth } from "@/lib/auth"
-import { notifyPageCreated } from "@/lib/notification-service"
-import { getCache, setCache, deleteCache } from "@/lib/redis"
 
 // Kullanıcının sayfalarını getir
 export async function GET(req: NextRequest) {
@@ -18,32 +16,10 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 })
     }
 
-    // Redis cache kontrolü (hata durumunda devam et)
-    let cachedPages = null
-    try {
-      const cacheKey = `user_pages:${userId}`
-      cachedPages = await getCache(cacheKey)
-      console.log("API: Cache result:", cachedPages ? "found" : "not found")
-    } catch (cacheError) {
-      console.log("API: Cache error (continuing):", cacheError)
-    }
-
-    if (cachedPages) {
-      return NextResponse.json({ success: true, pages: cachedPages })
-    }
-
     // Kullanıcının sayfalarını getir
     console.log("API: Fetching from database...")
     const pages = await getUserPages(userId)
     console.log("API: Found pages:", pages.length)
-
-    // Cache'e kaydet (hata durumunda devam et)
-    try {
-      const cacheKey = `user_pages:${userId}`
-      await setCache(cacheKey, pages, 300)
-    } catch (cacheError) {
-      console.log("API: Cache set error (continuing):", cacheError)
-    }
 
     return NextResponse.json({ success: true, pages })
   } catch (error) {
@@ -52,7 +28,7 @@ export async function GET(req: NextRequest) {
       {
         success: false,
         message: "Sayfalar getirilirken bir hata oluştu",
-        error: error.message,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
@@ -62,6 +38,8 @@ export async function GET(req: NextRequest) {
 // Yeni sayfa oluştur
 export async function POST(req: NextRequest) {
   try {
+    console.log("API: Creating page...")
+
     // Kullanıcı kimliğini doğrula
     const userId = await verifyAuth(req)
     if (!userId) {
@@ -69,7 +47,7 @@ export async function POST(req: NextRequest) {
     }
 
     // İstek gövdesini al
-    const { title, content, tags, isFavorite } = await req.json()
+    const { title, content = "", tags = [], isFavorite = false } = await req.json()
 
     // Sayfa oluştur
     const page = await createPage({
@@ -86,13 +64,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Sayfa oluşturulamadı" }, { status: 500 })
     }
 
-    await notifyPageCreated(userId, page._id.toString(), page.title)
-
-    await deleteCache(`user_pages:${userId}`)
-
+    console.log("API: Page created successfully:", page._id)
     return NextResponse.json({ success: true, page }, { status: 201 })
   } catch (error) {
-    console.error("Error creating page:", error)
-    return NextResponse.json({ success: false, message: "Sayfa oluşturulurken bir hata oluştu" }, { status: 500 })
+    console.error("API: Error creating page:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Sayfa oluşturulurken bir hata oluştu",
+        error: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
