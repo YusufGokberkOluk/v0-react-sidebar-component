@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createPage, getUserPages } from "@/lib/db"
 import { verifyAuth } from "@/lib/auth"
+import { notifyPageCreated } from "@/lib/notification-service"
+import { getCache, setCache, deleteCache } from "@/lib/redis"
 
 // Kullanıcının sayfalarını getir
 export async function GET(req: NextRequest) {
@@ -12,7 +14,16 @@ export async function GET(req: NextRequest) {
     }
 
     // Kullanıcının sayfalarını getir
+    const cacheKey = `user_pages:${userId}`
+    const cachedPages = await getCache(cacheKey)
+
+    if (cachedPages) {
+      return NextResponse.json({ success: true, pages: cachedPages })
+    }
+
     const pages = await getUserPages(userId)
+    await setCache(cacheKey, pages, 300) // 5 minutes cache
+
     return NextResponse.json({ success: true, pages })
   } catch (error) {
     console.error("Error fetching pages:", error)
@@ -46,6 +57,10 @@ export async function POST(req: NextRequest) {
     if (!page) {
       return NextResponse.json({ success: false, message: "Sayfa oluşturulamadı" }, { status: 500 })
     }
+
+    await notifyPageCreated(userId, page._id.toString(), page.title)
+
+    await deleteCache(`user_pages:${userId}`)
 
     return NextResponse.json({ success: true, page }, { status: 201 })
   } catch (error) {

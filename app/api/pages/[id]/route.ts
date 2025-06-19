@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import { getPageById, updatePage, deletePage, checkPageAccess } from "@/lib/db"
+import { getCache, setCache, deleteCache } from "@/lib/redis"
 
 // Belirli bir sayfayı getir
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -12,6 +13,12 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     const pageId = params.id
+    const cacheKey = `page:${pageId}`
+    const cachedPage = await getCache(cacheKey)
+
+    if (cachedPage) {
+      return NextResponse.json({ success: true, page: cachedPage, accessLevel: cachedPage.accessLevel })
+    }
 
     // Sayfanın var olduğunu kontrol et
     const page = await getPageById(pageId)
@@ -24,6 +31,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     if (!access.hasAccess) {
       return NextResponse.json({ success: false, message: "Bu sayfaya erişim yetkiniz yok" }, { status: 403 })
     }
+
+    await setCache(cacheKey, { ...page, accessLevel: access.accessLevel }, 600) // 10 minutes cache
 
     return NextResponse.json({ success: true, page, accessLevel: access.accessLevel })
   } catch (error) {
@@ -64,6 +73,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       return NextResponse.json({ success: false, message: "Sayfa güncellenemedi" }, { status: 500 })
     }
 
+    await deleteCache(`page:${pageId}`)
+    await deleteCache(`user_pages:${userId}`)
+
     return NextResponse.json({ success: true, page: updatedPage })
   } catch (error) {
     console.error("Error updating page:", error)
@@ -94,6 +106,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     if (!success) {
       return NextResponse.json({ success: false, message: "Sayfa silinemedi" }, { status: 500 })
     }
+
+    await deleteCache(`page:${pageId}`)
+    await deleteCache(`user_pages:${userId}`)
 
     return NextResponse.json({ success: true, message: "Sayfa başarıyla silindi" })
   } catch (error) {
