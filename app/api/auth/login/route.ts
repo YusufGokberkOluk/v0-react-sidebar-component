@@ -9,58 +9,68 @@ const JWT_SECRET = process.env.JWT_SECRET || "etude-app-secret-key"
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json()
+    console.log("Login attempt for:", email)
 
     // Basit doğrulama
     if (!email || !password) {
       return NextResponse.json({ success: false, message: "Email ve şifre gereklidir" }, { status: 400 })
     }
 
-    try {
-      // Kullanıcı girişi
-      const user = await loginUser(email, password)
+    // Email format kontrolü
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      return NextResponse.json({ success: false, message: "Geçerli bir email adresi giriniz" }, { status: 400 })
+    }
 
-      if (!user) {
-        return NextResponse.json({ success: false, message: "Geçersiz e-posta veya şifre" }, { status: 401 })
-      }
+    // Kullanıcı girişi
+    const user = await loginUser(email, password)
 
-      // JWT token oluştur
-      const token = sign(
-        {
-          id: user._id.toString(), // ObjectId'yi string'e çevir
+    if (!user) {
+      console.log("Login failed for:", email)
+      return NextResponse.json({ success: false, message: "Geçersiz e-posta veya şifre" }, { status: 401 })
+    }
+
+    // JWT token oluştur
+    const token = sign(
+      {
+        id: user._id.toString(),
+        email: user.email,
+      },
+      JWT_SECRET,
+      { expiresIn: "7d" },
+    )
+
+    // Token'ı çerezlere kaydet
+    cookies().set({
+      name: "token",
+      value: token,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 7, // 7 gün
+      path: "/",
+    })
+
+    console.log("Login successful for:", email)
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Giriş başarılı",
+        user: {
+          id: user._id.toString(),
+          name: user.name,
           email: user.email,
         },
-        JWT_SECRET,
-        { expiresIn: "7d" },
-      )
-
-      // Token'ı çerezlere kaydet
-      cookies().set({
-        name: "token", // auth_token yerine token kullan (tutarlılık için)
-        value: token,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 60 * 60 * 24 * 7, // 7 gün
-        path: "/",
-      })
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: "Giriş başarılı",
-          user: {
-            id: user._id.toString(),
-            name: user.name,
-            email: user.email,
-          },
-        },
-        { status: 200 },
-      )
-    } catch (dbError) {
-      console.error("Database error:", dbError)
-      return NextResponse.json({ success: false, message: "Veritabanı hatası" }, { status: 500 })
-    }
+      },
+      { status: 200 },
+    )
   } catch (error) {
     console.error("Login error:", error)
-    return NextResponse.json({ success: false, message: "Giriş sırasında bir hata oluştu" }, { status: 500 })
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Giriş sırasında bir hata oluştu. Lütfen tekrar deneyin.",
+      },
+      { status: 500 },
+    )
   }
 }

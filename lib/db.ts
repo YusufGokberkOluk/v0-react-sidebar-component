@@ -1,208 +1,323 @@
 import { ObjectId } from "mongodb"
 import { getCollection, getMongoDb } from "./mongodb"
 import bcrypt from "bcryptjs"
-import type { User, Page, Share, Notification } from "./db-types"
+import type { User, Page, PageShare, Notification } from "./db-types"
 
-// --- User login -------------------------------------------------------------
-export async function loginUser(email: string, password: string): Promise<User | null> {
-  const users = await getCollection<User>("users")
-  const user = await users.findOne({ email })
-  if (!user) return null
-
-  const passwordMatch = await bcrypt.compare(password, user.password)
-  if (!passwordMatch) return null
-
-  // şifre alanını dışarı bırak
-  const { password: _pw, ...userWithoutPassword } = user as User
-  return userWithoutPassword as User
-}
-
-// --- Sayfa erişim kontrolü --------------------------------------------------
-export async function checkPageAccess(
-  pageId: string,
-  userIdOrEmail: string,
-): Promise<{ hasAccess: boolean; accessLevel?: "owner" | "edit" | "view" }> {
-  const db = await getMongoDb()
-
-  // 1- Sayfa var mı?
-  const page = await db.collection("pages").findOne({ _id: new ObjectId(pageId) })
-  if (!page) return { hasAccess: false }
-
-  // 2- Sahibi mi?
-  if (page.userId.toString() === userIdOrEmail) {
-    return { hasAccess: true, accessLevel: "owner" }
-  }
-
-  // 3- E-posta mı yoksa userId mi?
-  let email = userIdOrEmail
+// Kullanıcı oluşturma
+export async function createUser(userData: Omit<User, "_id">): Promise<User | null> {
   try {
-    // userId ise kullanıcıyı getirip mail’ini al
-    const user = await db.collection("users").findOne({ _id: new ObjectId(userIdOrEmail) })
-    if (user) email = user.email
-  } catch {
-    /* gelen değer zaten e-posta */
-  }
+    console.log("Creating user:", userData.email)
+    const collection = await getCollection<User>("users")
 
-  // 4- Paylaşımları kontrol et
-  const share = await db.collection("shares").findOne({
-    pageId: new ObjectId(pageId),
-    sharedWithEmail: email,
-    status: "accepted",
-  })
-
-  if (share)
-    return {
-      hasAccess: true,
-      accessLevel: share.accessLevel as "edit" | "view",
-    }
-
-  return { hasAccess: false }
-}
-
-// --- Favori sayfalar --------------------------------------------------------
-export async function getUserFavoritePages(userId: string): Promise<Page[]> {
-  const pages = await getCollection<Page>("pages")
-  return (await pages.find({ userId, isFavorite: true }).sort({ updatedAt: -1 }).toArray()) as Page[]
-}
-
-// Kullanıcı işlemleri
-export async function createUser(userData: Omit<User, "_id">) {
-  try {
-    const users = await getCollection<User>("users")
-
-    // Email kontrolü
-    const existingUser = await users.findOne({ email: userData.email })
+    // E-posta adresinin zaten kullanımda olup olmadığını kontrol et
+    const existingUser = await collection.findOne({ email: userData.email })
     if (existingUser) {
-      throw new Error("Bu email adresi zaten kullanılıyor")
+      console.log("Email already in use:", userData.email)
+      return null // E-posta zaten kullanımda
     }
 
     // Şifreyi hashle
-    const hashedPassword = await bcrypt.hash(userData.password, 12)
+    const hashedPassword = await bcrypt.hash(userData.password, 10)
 
-    const user = {
+    // Kullanıcıyı oluştur
+    const result = await collection.insertOne({
       ...userData,
       password: hashedPassword,
       createdAt: new Date(),
       updatedAt: new Date(),
-    }
+    })
 
-    const result = await users.insertOne(user)
-    return { ...user, _id: result.insertedId }
+    // Oluşturulan kullanıcıyı döndür (şifre hariç)
+    const newUser = await collection.findOne({ _id: result.insertedId })
+    if (!newUser) return null
+
+    // Yeni kullanıcı için varsayılan bir sayfa oluştur
+    await createDefaultPage(result.insertedId.toString())
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = newUser as User
+    return userWithoutPassword as User
   } catch (error) {
     console.error("Error creating user:", error)
-    throw error
+    return null
   }
 }
 
-export async function getUserByEmail(email: string) {
+// Yeni kullanıcı için varsayılan sayfa oluşturma
+async function createDefaultPage(userId: string): Promise<void> {
   try {
-    const users = await getCollection<User>("users")
-    return await users.findOne({ email })
+    console.log("Creating default page for user:", userId)
+    await createPage({
+      title: "Ana Sayfa",
+      content: "Hoş geldiniz! Bu sizin ana sayfanızdır. Buraya önemli notlar ekleyebilirsiniz.",
+      tags: ["home", "important"],
+      isFavorite: true,
+      userId,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
   } catch (error) {
-    console.error("Error getting user by email:", error)
-    throw error
+    console.error("Error creating default page:", error)
   }
 }
 
-export async function getUserById(userId: string) {
+// Kullanıcı girişi
+export async function loginUser(email: string, password: string): Promise<User | null> {
   try {
-    const users = await getCollection<User>("users")
-    return await users.findOne({ _id: new ObjectId(userId) })
+    console.log("Logging in user:", email)
+    const collection = await getCollection<User>("users")
+    const user = await collection.findOne({ email })
+
+    if (!user) {
+      console.log("User not found with email:", email)
+      return null
+    }
+
+    // Şifreyi karşılaştır
+    const passwordMatch = await bcrypt.compare(password, user.password)
+
+    if (!passwordMatch) {
+      console.log("Invalid password for user:", email)
+      return null
+    }
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password: hashedPassword, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
+  } catch (error) {
+    console.error("Error logging in user:", error)
+    return null
+  }
+}
+
+// Kullanıcıyı ID'ye göre getir
+export async function getUserById(id: string): Promise<User | null> {
+  try {
+    console.log("Getting user by ID:", id)
+    const collection = await getCollection<User>("users")
+    const user = await collection.findOne({ _id: new ObjectId(id) })
+
+    if (!user) {
+      console.log("User not found with ID:", id)
+      return null
+    }
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
   } catch (error) {
     console.error("Error getting user by ID:", error)
-    throw error
+    return null
   }
 }
 
-export async function updateUser(userId: string, updateData: Partial<User>) {
+// E-posta ile kullanıcı getir
+export async function getUserByEmail(email: string): Promise<User | null> {
   try {
-    const users = await getCollection<User>("users")
-    const result = await users.updateOne(
-      { _id: new ObjectId(userId) },
-      { $set: { ...updateData, updatedAt: new Date() } },
-    )
-    return result.modifiedCount > 0
+    console.log("Getting user by email:", email)
+    const collection = await getCollection<User>("users")
+    const user = await collection.findOne({ email })
+
+    if (!user) {
+      console.log("User not found with email:", email)
+      return null
+    }
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = user as User
+    return userWithoutPassword as User
+  } catch (error) {
+    console.error("Error getting user by email:", error)
+    return null
+  }
+}
+
+// Kullanıcıyı güncelle
+export async function updateUser(id: string, updateData: Partial<User>): Promise<User | null> {
+  try {
+    console.log("Updating user with ID:", id)
+    const collection = await getCollection<User>("users")
+
+    // Şifre güncelleniyorsa, hashle
+    if (updateData.password) {
+      updateData.password = await bcrypt.hash(updateData.password, 10)
+    }
+
+    // updatedAt alanını güncelle
+    updateData.updatedAt = new Date()
+
+    const result = await collection.updateOne({ _id: new ObjectId(id) }, { $set: updateData })
+
+    if (result.modifiedCount === 0) {
+      console.log("User not found or no changes applied with ID:", id)
+      return null
+    }
+
+    // Güncellenmiş kullanıcıyı getir
+    const updatedUser = await collection.findOne({ _id: new ObjectId(id) })
+    if (!updatedUser) return null
+
+    // Şifreyi çıkar ve kullanıcıyı döndür
+    const { password, ...userWithoutPassword } = updatedUser as User
+    return userWithoutPassword as User
   } catch (error) {
     console.error("Error updating user:", error)
-    throw error
+    return null
   }
 }
 
-export async function deleteUser(userId: string) {
+// Kullanıcıyı ve tüm verilerini sil
+export async function deleteUser(id: string): Promise<boolean> {
   try {
-    const users = await getCollection<User>("users")
-    const result = await users.deleteOne({ _id: new ObjectId(userId) })
-    return result.deletedCount > 0
+    console.log("Deleting user with ID:", id)
+    const db = await getMongoDb()
+
+    // Önce kullanıcının var olup olmadığını kontrol et
+    const user = await db.collection("users").findOne({ _id: new ObjectId(id) })
+    if (!user) {
+      console.log("User not found with ID:", id)
+      return false
+    }
+
+    // 1. Kullanıcının tüm sayfalarını sil
+    const pagesResult = await db.collection("pages").deleteMany({ userId: id })
+    console.log(`Deleted ${pagesResult.deletedCount} pages for user:`, id)
+
+    // 2. Kullanıcının tüm sayfa paylaşımlarını sil
+    const sharesResult = await db.collection("pageShares").deleteMany({
+      $or: [{ sharedByUserId: new ObjectId(id) }, { sharedWithEmail: user.email }],
+    })
+    console.log(`Deleted ${sharesResult.deletedCount} page shares for user:`, id)
+
+    // 3. Kullanıcının tüm bildirimlerini sil
+    const notificationsResult = await db.collection("notifications").deleteMany({
+      $or: [{ userId: new ObjectId(id) }, { recipientEmail: user.email }],
+    })
+    console.log(`Deleted ${notificationsResult.deletedCount} notifications for user:`, id)
+
+    // 4. Son olarak kullanıcıyı sil
+    const userResult = await db.collection("users").deleteOne({ _id: new ObjectId(id) })
+
+    if (userResult.deletedCount === 0) {
+      console.log("Failed to delete user with ID:", id)
+      return false
+    }
+
+    console.log("Successfully deleted user and all associated data:", id)
+    return true
   } catch (error) {
     console.error("Error deleting user:", error)
-    throw error
+    return false
   }
 }
 
-// Sayfa işlemleri
-export async function createPage(pageData: Omit<Page, "_id">) {
+// Sayfa oluşturma
+export async function createPage(pageData: Omit<Page, "_id">): Promise<Page | null> {
   try {
-    const pages = await getCollection<Page>("pages")
-    const result = await pages.insertOne(pageData)
-    return { ...pageData, _id: result.insertedId }
+    console.log("Creating page:", pageData.title)
+    const collection = await getCollection<Page>("pages")
+    const result = await collection.insertOne({
+      ...pageData,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const newPage = await collection.findOne({ _id: result.insertedId })
+    return newPage as Page
   } catch (error) {
     console.error("Error creating page:", error)
-    throw error
+    return null
   }
 }
 
-export async function getUserPages(userId: string) {
+// Kullanıcının tüm sayfalarını getirme
+export async function getUserPages(userId: string): Promise<Page[]> {
   try {
-    const pages = await getCollection<Page>("pages")
-    return await pages.find({ userId }).sort({ updatedAt: -1 }).toArray()
+    console.log("Getting pages for user:", userId)
+    const collection = await getCollection<Page>("pages")
+    const pages = await collection.find({ userId }).toArray()
+    return pages as Page[]
   } catch (error) {
     console.error("Error getting user pages:", error)
-    throw error
+    return []
   }
 }
 
-export async function getPageById(pageId: string) {
+// Sayfa ID'sine göre sayfa getirme
+export async function getPageById(pageId: string): Promise<Page | null> {
   try {
-    const pages = await getCollection<Page>("pages")
-    return await pages.findOne({ _id: new ObjectId(pageId) })
+    console.log("Getting page by ID:", pageId)
+    const collection = await getCollection<Page>("pages")
+    const page = await collection.findOne({ _id: new ObjectId(pageId) })
+    return page as Page
   } catch (error) {
     console.error("Error getting page by ID:", error)
-    throw error
+    return null
   }
 }
 
-export async function updatePage(pageId: string, updateData: Partial<Page>) {
+// Sayfa güncelleme
+export async function updatePage(pageId: string, updateData: Partial<Page>): Promise<Page | null> {
   try {
-    const pages = await getCollection<Page>("pages")
-    const result = await pages.updateOne(
-      { _id: new ObjectId(pageId) },
-      { $set: { ...updateData, updatedAt: new Date() } },
-    )
-    if (result.modifiedCount > 0) {
-      return await getPageById(pageId)
+    console.log("Updating page with ID:", pageId)
+    const collection = await getCollection<Page>("pages")
+
+    // updatedAt alanını güncelle
+    updateData.updatedAt = new Date()
+
+    const result = await collection.updateOne({ _id: new ObjectId(pageId) }, { $set: updateData })
+
+    if (result.modifiedCount === 0) {
+      console.log("Page not found or no changes applied with ID:", pageId)
+      return null
     }
-    return null
+
+    const updatedPage = await collection.findOne({ _id: new ObjectId(pageId) })
+    return updatedPage as Page
   } catch (error) {
     console.error("Error updating page:", error)
-    throw error
+    return null
   }
 }
 
-export async function deletePage(pageId: string) {
+// Sayfa silme
+export async function deletePage(pageId: string): Promise<boolean> {
   try {
-    const pages = await getCollection<Page>("pages")
-    const result = await pages.deleteOne({ _id: new ObjectId(pageId) })
-    return result.deletedCount > 0
+    console.log("Deleting page with ID:", pageId)
+    const collection = await getCollection<Page>("pages")
+    const result = await collection.deleteOne({ _id: new ObjectId(pageId) })
+
+    if (result.deletedCount === 0) {
+      console.log("Page not found with ID:", pageId)
+      return false
+    }
+
+    return true
   } catch (error) {
     console.error("Error deleting page:", error)
-    throw error
+    return false
   }
 }
 
-export async function searchPages(userId: string, query: string) {
+// Kullanıcının favori sayfalarını getirme
+export async function getUserFavoritePages(userId: string): Promise<Page[]> {
   try {
-    const pages = await getCollection<Page>("pages")
-    return await pages
+    console.log("Getting favorite pages for user:", userId)
+    const collection = await getCollection<Page>("pages")
+    const pages = await collection.find({ userId, isFavorite: true }).toArray()
+    return pages as Page[]
+  } catch (error) {
+    console.error("Error getting user favorite pages:", error)
+    return []
+  }
+}
+
+// Sayfa arama
+export async function searchPages(userId: string, query: string): Promise<Page[]> {
+  try {
+    console.log("Searching pages for user:", userId, "with query:", query)
+    const collection = await getCollection<Page>("pages")
+    const pages = await collection
       .find({
         userId,
         $or: [
@@ -211,153 +326,131 @@ export async function searchPages(userId: string, query: string) {
           { tags: { $in: [new RegExp(query, "i")] } },
         ],
       })
-      .sort({ updatedAt: -1 })
       .toArray()
+    return pages as Page[]
   } catch (error) {
     console.error("Error searching pages:", error)
-    throw error
+    return []
   }
 }
 
-export async function getPagesByTag(userId: string, tag: string) {
+// Kullanıcının tüm sayfalarını silme
+export async function deleteAllUserPages(userId: string): Promise<boolean> {
   try {
-    const pages = await getCollection<Page>("pages")
-    return await pages.find({ userId, tags: tag }).sort({ updatedAt: -1 }).toArray()
+    console.log("Deleting all pages for user:", userId)
+    const collection = await getCollection<Page>("pages")
+    const result = await collection.deleteMany({ userId })
+    console.log(`Deleted ${result.deletedCount} pages for user:`, userId)
+    return true
   } catch (error) {
-    console.error("Error getting pages by tag:", error)
-    throw error
+    console.error("Error deleting all pages for user:", error)
+    return false
   }
 }
 
-export async function getFavoritePages(userId: string) {
+// Sayfa erişim kontrolü
+export async function checkPageAccess(
+  pageId: string,
+  userIdOrEmail: string,
+): Promise<{ hasAccess: boolean; accessLevel?: "owner" | "edit" | "view" }> {
   try {
-    const pages = await getCollection<Page>("pages")
-    return await pages.find({ userId, isFavorite: true }).sort({ updatedAt: -1 }).toArray()
+    console.log("Checking page access for:", userIdOrEmail)
+    const db = await getMongoDb()
+
+    // Sayfa bilgilerini getir
+    const page = await db.collection("pages").findOne({ _id: new ObjectId(pageId) })
+
+    if (!page) {
+      return { hasAccess: false }
+    }
+
+    // Kullanıcı sayfanın sahibi mi kontrol et
+    if (page.userId.toString() === userIdOrEmail) {
+      return { hasAccess: true, accessLevel: "owner" }
+    }
+
+    // Kullanıcı ID mi yoksa e-posta mı kontrol et
+    let userEmail: string
+
+    try {
+      // Eğer ObjectId ise, kullanıcı ID'si olarak kabul et
+      new ObjectId(userIdOrEmail)
+
+      // Kullanıcıyı bul
+      const user = await db.collection("users").findOne({ _id: new ObjectId(userIdOrEmail) })
+
+      if (!user) {
+        return { hasAccess: false }
+      }
+
+      userEmail = user.email
+    } catch (e) {
+      // ObjectId değilse, e-posta olarak kabul et
+      userEmail = userIdOrEmail
+    }
+
+    // Paylaşım kontrolü
+    const share = await db.collection("pageShares").findOne({
+      pageId: new ObjectId(pageId),
+      sharedWithEmail: userEmail,
+      status: "accepted",
+    })
+
+    if (share) {
+      return { hasAccess: true, accessLevel: share.accessLevel as "edit" | "view" }
+    }
+
+    return { hasAccess: false }
   } catch (error) {
-    console.error("Error getting favorite pages:", error)
-    throw error
+    console.error("Error checking page access:", error)
+    return { hasAccess: false }
   }
 }
 
-export async function getUserTags(userId: string) {
+// Sayfa paylaşımlarını getir
+export async function getPageShares(pageId: string): Promise<PageShare[]> {
   try {
-    const pages = await getCollection<Page>("pages")
-    const result = await pages
-      .aggregate([
-        { $match: { userId } },
-        { $unwind: "$tags" },
-        { $group: { _id: "$tags", count: { $sum: 1 } } },
-        { $sort: { count: -1 } },
-      ])
+    console.log("Getting shares for page:", pageId)
+    const db = await getMongoDb()
+
+    const shares = await db
+      .collection("pageShares")
+      .find({ pageId: new ObjectId(pageId) })
       .toArray()
 
-    return result.map((item) => ({ tag: item._id, count: item.count }))
+    return shares as PageShare[]
   } catch (error) {
-    console.error("Error getting user tags:", error)
-    throw error
+    console.error("Error getting page shares:", error)
+    return []
   }
 }
 
-// Paylaşım işlemleri
-export async function createShare(shareData: Omit<Share, "_id">) {
+// Kullanıcının bildirimlerini getir
+export async function getUserNotifications(userId: string): Promise<Notification[]> {
   try {
-    const shares = await getCollection<Share>("shares")
-    const result = await shares.insertOne(shareData)
-    return { ...shareData, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error creating share:", error)
-    throw error
-  }
-}
+    console.log("Getting notifications for user:", userId)
+    const db = await getMongoDb()
 
-export async function getShareById(shareId: string) {
-  try {
-    const shares = await getCollection<Share>("shares")
-    return await shares.findOne({ _id: new ObjectId(shareId) })
-  } catch (error) {
-    console.error("Error getting share by ID:", error)
-    throw error
-  }
-}
+    // Kullanıcıyı bul
+    const user = await db.collection("users").findOne({ _id: new ObjectId(userId) })
 
-export async function getShareByToken(token: string) {
-  try {
-    const shares = await getCollection<Share>("shares")
-    return await shares.findOne({ token })
-  } catch (error) {
-    console.error("Error getting share by token:", error)
-    throw error
-  }
-}
+    if (!user) {
+      return []
+    }
 
-export async function updateShare(shareId: string, updateData: Partial<Share>) {
-  try {
-    const shares = await getCollection<Share>("shares")
-    const result = await shares.updateOne(
-      { _id: new ObjectId(shareId) },
-      { $set: { ...updateData, updatedAt: new Date() } },
-    )
-    return result.modifiedCount > 0
-  } catch (error) {
-    console.error("Error updating share:", error)
-    throw error
-  }
-}
+    // Kullanıcının bildirimlerini getir
+    const notifications = await db
+      .collection("notifications")
+      .find({
+        $or: [{ userId: new ObjectId(userId) }, { recipientEmail: user.email }],
+      })
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .toArray()
 
-export async function deleteShare(shareId: string) {
-  try {
-    const shares = await getCollection<Share>("shares")
-    const result = await shares.deleteOne({ _id: new ObjectId(shareId) })
-    return result.deletedCount > 0
-  } catch (error) {
-    console.error("Error deleting share:", error)
-    throw error
-  }
-}
-
-// Bildirim işlemleri
-export async function createNotification(notificationData: Omit<Notification, "_id">) {
-  try {
-    const notifications = await getCollection<Notification>("notifications")
-    const result = await notifications.insertOne(notificationData)
-    return { ...notificationData, _id: result.insertedId }
-  } catch (error) {
-    console.error("Error creating notification:", error)
-    throw error
-  }
-}
-
-export async function getUserNotifications(userId: string) {
-  try {
-    const notifications = await getCollection<Notification>("notifications")
-    return await notifications.find({ userId }).sort({ createdAt: -1 }).toArray()
+    return notifications as Notification[]
   } catch (error) {
     console.error("Error getting user notifications:", error)
-    throw error
-  }
-}
-
-export async function markNotificationAsRead(notificationId: string) {
-  try {
-    const notifications = await getCollection<Notification>("notifications")
-    const result = await notifications.updateOne(
-      { _id: new ObjectId(notificationId) },
-      { $set: { isRead: true, updatedAt: new Date() } },
-    )
-    return result.modifiedCount > 0
-  } catch (error) {
-    console.error("Error marking notification as read:", error)
-    throw error
-  }
-}
-
-export async function deleteNotification(notificationId: string) {
-  try {
-    const notifications = await getCollection<Notification>("notifications")
-    const result = await notifications.deleteOne({ _id: new ObjectId(notificationId) })
-    return result.deletedCount > 0
-  } catch (error) {
-    console.error("Error deleting notification:", error)
-    throw error
+    return []
   }
 }
