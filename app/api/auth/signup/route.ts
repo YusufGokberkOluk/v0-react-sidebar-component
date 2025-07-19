@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createUser } from "@/lib/db"
-import { sendWelcomeEmail } from "@/lib/notification-service"
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,7 +25,6 @@ export async function POST(req: NextRequest) {
       }
 
       console.log("User created successfully:", email)
-      await sendWelcomeEmail(user._id.toString(), user.email, user.name)
       return NextResponse.json({ success: true, message: "Hesabınız başarıyla oluşturuldu", user }, { status: 201 })
     } catch (createError) {
       console.error("Error during user creation:", createError)

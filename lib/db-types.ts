@@ -20,7 +20,7 @@ export interface Page {
   updatedAt: Date
 }
 
-// Yeni eklenen paylaşım tipi
+// Güncellenmiş paylaşım tipi - token eklendi
 export interface PageShare {
   _id?: string | ObjectId
   pageId: string | ObjectId
@@ -28,11 +28,11 @@ export interface PageShare {
   sharedWithEmail: string
   accessLevel: "view" | "edit"
   status: "pending" | "accepted" | "rejected"
+  inviteToken?: string // Davet linki için token
   createdAt: Date
   updatedAt?: Date
 }
 
-// Yeni eklenen bildirim tipi
 export interface Notification {
   _id?: string | ObjectId
   userId?: string | ObjectId

@@ -1,79 +1,202 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
 import Sidebar from "./sidebar"
 import Editor from "./editor"
-import type { Page } from "@/lib/db-types"
+import { useRouter } from "next/navigation"
 
-interface AppLayoutProps {
-  children?: React.ReactNode
+type SaveStatus = "idle" | "saving" | "saved" | "error"
+
+interface Page {
+  _id: string
+  title: string
+  content: string
+  tags: string[]
+  isFavorite: boolean
+  userId: string
+  createdAt: string
+  updatedAt: string
 }
 
-export default function AppLayout({ children }: AppLayoutProps) {
+export default function AppLayout() {
   const [pages, setPages] = useState<Page[]>([])
-  const [selectedPage, setSelectedPage] = useState<Page | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null)
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle")
+  const [saveTimer, setSaveTimer] = useState<NodeJS.Timeout | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const router = useRouter()
 
-  const fetchPages = async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  // Kullanıcının sayfalarını getir
+  useEffect(() => {
+    async function fetchPages() {
+      try {
+        setIsLoading(true)
+        const response = await fetch("/api/pages")
 
-      const response = await fetch("/api/pages", {
-        method: "GET",
+        if (!response.ok) {
+          if (response.status === 401) {
+            // Kullanıcı giriş yapmamış, giriş sayfasına yönlendir
+            router.push("/sign-in")
+            return
+          }
+          throw new Error("Failed to fetch pages")
+        }
+
+        const data = await response.json()
+        setPages(data.pages)
+
+        // İlk sayfayı seç (eğer sayfa varsa)
+        if (data.pages.length > 0) {
+          setSelectedPageId(data.pages[0]._id)
+        }
+      } catch (error) {
+        console.error("Error fetching pages:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchPages()
+  }, [router])
+
+  // Seçili sayfayı bul
+  const selectedPage = selectedPageId ? pages.find((page) => page._id === selectedPageId) : null
+
+  // Sayfa kaydetme fonksiyonu
+  const savePage = async (pageId: string, updateData: Partial<Page>) => {
+    setSaveStatus("saving")
+
+    try {
+      const response = await fetch(`/api/pages/${pageId}`, {
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        body: JSON.stringify(updateData),
       })
 
       if (!response.ok) {
-        if (response.status === 401) {
-          router.push("/sign-in")
-          return
-        }
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error("Failed to save page")
       }
 
       const data = await response.json()
-      console.log("Fetched pages:", data)
 
-      if (data.success && Array.isArray(data.pages)) {
-        setPages(data.pages)
-      } else {
-        setPages([])
-      }
+      // Sayfalar listesini güncelle
+      setPages(pages.map((page) => (page._id === pageId ? { ...page, ...data.page } : page)))
+
+      setSaveStatus("saved")
     } catch (error) {
-      console.error("Error fetching pages:", error)
-      setError("Sayfalar yüklenirken hata oluştu")
-      setPages([])
-    } finally {
-      setLoading(false)
+      console.error("Error saving page:", error)
+      setSaveStatus("error")
     }
   }
 
-  useEffect(() => {
-    fetchPages()
-  }, [])
+  // Otomatik kaydetme fonksiyonu
+  const triggerSave = (pageId: string, updateData: Partial<Page>) => {
+    // Mevcut zamanlayıcıyı temizle
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+    }
 
-  const handlePageSelect = (page: Page) => {
-    setSelectedPage(page)
+    // Yeni bir zamanlayıcı ayarla
+    const timer = setTimeout(() => {
+      savePage(pageId, updateData)
+    }, 1000)
+
+    setSaveTimer(timer)
+    setSaveStatus("idle")
   }
 
-  const handlePageCreate = async (title: string) => {
+  // Sayfalar arasında gezinme
+  const handleNavigate = async (pageId: string) => {
+    try {
+      // Sayfa erişim kontrolü
+      const response = await fetch(`/api/pages/${pageId}`)
+
+      if (response.ok) {
+        const data = await response.json()
+
+        if (data.success) {
+          setSelectedPageId(pageId)
+
+          // Erişim seviyesine göre UI'ı güncelle
+          if (data.accessLevel === "view") {
+            // Salt okunur mod
+            // Burada düzenleme butonlarını devre dışı bırakabilirsiniz
+            console.log("View-only access")
+          }
+        } else {
+          console.error("Failed to access page:", data.message)
+          alert("Bu sayfaya erişim yetkiniz yok.")
+        }
+      } else {
+        console.error("Failed to check page access")
+      }
+    } catch (error) {
+      console.error("Error navigating to page:", error)
+    }
+  }
+
+  // Favori durumunu değiştirme
+  const handleToggleFavorite = async (pageId: string) => {
+    const page = pages.find((p) => p._id === pageId)
+
+    if (page) {
+      // Kullanıcı arayüzünü hemen güncelle (optimistik güncelleme)
+      setPages(pages.map((p) => (p._id === pageId ? { ...p, isFavorite: !p.isFavorite } : p)))
+
+      // Veritabanını güncelle
+      await savePage(pageId, { isFavorite: !page.isFavorite })
+    }
+  }
+
+  // İçerik değişikliklerini işleme
+  const handleContentChange = (newContent: string) => {
+    if (selectedPageId && selectedPage) {
+      // Kullanıcı arayüzünü hemen güncelle
+      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, content: newContent } : page)))
+
+      // Otomatik kaydetmeyi tetikle
+      triggerSave(selectedPageId, { content: newContent })
+    }
+  }
+
+  // Başlık değişikliklerini işleme
+  const handleTitleChange = (newTitle: string) => {
+    if (selectedPageId && selectedPage) {
+      // Kullanıcı arayüzünü hemen güncelle
+      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, title: newTitle } : page)))
+
+      // Otomatik kaydetmeyi tetikle
+      triggerSave(selectedPageId, { title: newTitle })
+    }
+  }
+
+  // Etiket değişikliklerini işleme
+  const handleTagsChange = (newTags: string[]) => {
+    if (selectedPageId && selectedPage) {
+      // Kullanıcı arayüzünü hemen güncelle
+      setPages(pages.map((page) => (page._id === selectedPageId ? { ...page, tags: newTags } : page)))
+
+      // Otomatik kaydetmeyi tetikle
+      triggerSave(selectedPageId, { tags: newTags })
+    }
+  }
+
+  // Yeni sayfa oluşturma
+  const handleCreatePage = async () => {
     try {
       const response = await fetch("/api/pages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
-        body: JSON.stringify({ title, content: "" }),
+        body: JSON.stringify({
+          title: "Yeni Sayfa",
+          content: "",
+          tags: [],
+          isFavorite: false,
+        }),
       })
 
       if (!response.ok) {
@@ -81,128 +204,91 @@ export default function AppLayout({ children }: AppLayoutProps) {
       }
 
       const data = await response.json()
-      if (data.success) {
-        await fetchPages()
-        setSelectedPage(data.page)
-      }
+
+      // Yeni sayfayı listeye ekle
+      setPages([...pages, data.page])
+
+      // Yeni sayfayı seç
+      setSelectedPageId(data.page._id)
     } catch (error) {
       console.error("Error creating page:", error)
-      setError("Sayfa oluşturulurken hata oluştu")
     }
   }
 
-  const handlePageUpdate = async (pageId: string, updates: Partial<Page>) => {
-    try {
-      const response = await fetch(`/api/pages/${pageId}`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(updates),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to update page")
-      }
-
-      const data = await response.json()
-      if (data.success) {
-        await fetchPages()
-        setSelectedPage(data.page)
-      }
-    } catch (error) {
-      console.error("Error updating page:", error)
-      setError("Sayfa güncellenirken hata oluştu")
-    }
-  }
-
-  const handlePageDelete = async (pageId: string) => {
+  // Sayfa silme
+  const handleDeletePage = async (pageId: string) => {
     try {
       const response = await fetch(`/api/pages/${pageId}`, {
         method: "DELETE",
-        credentials: "include",
       })
 
       if (!response.ok) {
         throw new Error("Failed to delete page")
       }
 
-      await fetchPages()
-      if (selectedPage?._id === pageId) {
-        setSelectedPage(null)
+      // Sayfayı listeden kaldır
+      setPages(pages.filter((page) => page._id !== pageId))
+
+      // Eğer silinen sayfa seçili sayfaysa, başka bir sayfayı seç
+      if (selectedPageId === pageId) {
+        const remainingPages = pages.filter((page) => page._id !== pageId)
+        setSelectedPageId(remainingPages.length > 0 ? remainingPages[0]._id : null)
       }
     } catch (error) {
       console.error("Error deleting page:", error)
-      setError("Sayfa silinirken hata oluştu")
     }
   }
 
-  if (loading) {
-    return (
-      <div className="flex h-screen bg-[#f8faf8] dark:bg-[#13262F]">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#ABD1B5]"></div>
-            <p className="text-[#13262F] dark:text-[#EDF4ED]">Sayfalar yükleniyor...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="flex h-screen bg-[#f8faf8] dark:bg-[#13262F]">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="text-red-500 text-center">
-              <p className="text-lg font-semibold">Hata!</p>
-              <p>{error}</p>
-              <button
-                onClick={fetchPages}
-                className="mt-4 px-4 py-2 bg-[#ABD1B5] text-[#13262F] rounded hover:bg-[#9BC4A4] transition-colors"
-              >
-                Tekrar Dene
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+  // Zamanlayıcıyı temizle
+  useEffect(() => {
+    return () => {
+      if (saveTimer) {
+        clearTimeout(saveTimer)
+      }
+    }
+  }, [saveTimer])
 
   return (
-    <div className="flex h-screen bg-[#f8faf8] dark:bg-[#13262F]">
-      <Sidebar
-        pages={pages}
-        selectedPage={selectedPage}
-        onPageSelect={handlePageSelect}
-        onPageCreate={handlePageCreate}
-        onPageDelete={handlePageDelete}
-        onRefresh={fetchPages}
-      />
-      <div className="flex-1">
-        {selectedPage ? (
-          <Editor page={selectedPage} onUpdate={handlePageUpdate} />
-        ) : (
+    <div className="flex h-screen w-full overflow-hidden">
+      <div className="w-80 flex-shrink-0 border-r border-gray-200">
+        <Sidebar
+          pages={pages}
+          selectedPageId={selectedPageId || ""}
+          onNavigate={handleNavigate}
+          onToggleFavorite={handleToggleFavorite}
+          onCreatePage={handleCreatePage}
+          onDeletePage={handleDeletePage}
+          isLoading={isLoading}
+        />
+      </div>
+      <div className="flex-1 bg-white">
+        {isLoading ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <h2 className="text-2xl font-semibold text-[#13262F] dark:text-[#EDF4ED] mb-4">Hoş geldiniz!</h2>
-              <p className="text-[#13262F]/70 dark:text-[#EDF4ED]/70 mb-6">
-                Başlamak için sol taraftan bir sayfa seçin veya yeni bir sayfa oluşturun.
-              </p>
-              <button
-                onClick={() => handlePageCreate("Yeni Sayfa")}
-                className="px-6 py-3 bg-[#ABD1B5] text-[#13262F] rounded-lg hover:bg-[#9BC4A4] transition-colors font-medium"
-              >
-                İlk Sayfanızı Oluşturun
-              </button>
-            </div>
+            <div className="w-8 h-8 border-4 border-[#79B791] border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        ) : selectedPage ? (
+          <Editor
+            title={selectedPage.title}
+            pageId={selectedPage._id}
+            initialContent={selectedPage.content}
+            initialTags={selectedPage.tags}
+            saveStatus={saveStatus}
+            onChange={handleContentChange}
+            onTagsChange={handleTagsChange}
+            onTitleChange={handleTitleChange}
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-[#13262F]/70">
+            <p className="mb-4">Henüz hiç sayfa yok.</p>
+            <button
+              onClick={handleCreatePage}
+              className="px-4 py-2 bg-[#79B791] text-white rounded-md hover:bg-[#79B791]/90 transition-colors"
+            >
+              Yeni Sayfa Oluştur
+            </button>
           </div>
         )}
       </div>
-      {children}
     </div>
   )
 }

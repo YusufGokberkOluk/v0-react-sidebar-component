@@ -23,6 +23,7 @@ interface PageShare {
 export default function ShareModal({ pageId, onClose }: ShareModalProps) {
   const [email, setEmail] = useState("")
   const [accessLevel, setAccessLevel] = useState<AccessLevel>("view")
+  // Doğru genel paylaşım linki
   const [shareLink, setShareLink] = useState(`${window.location.origin}/share/${pageId}`)
   const [shares, setShares] = useState<PageShare[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -78,8 +79,13 @@ export default function ShareModal({ pageId, onClose }: ShareModalProps) {
       const data = await response.json()
 
       if (response.ok && data.success) {
-        setSuccess(`${email} başarıyla davet edildi.`)
+        setSuccess(`${email} başarıyla davet edildi. Davet linki e-posta ile gönderildi.`)
         setEmail("")
+
+        // Eğer davet linki dönerse, konsola yazdır (geliştirme için)
+        if (data.inviteLink) {
+          console.log(`Davet linki: ${window.location.origin}${data.inviteLink}`)
+        }
 
         // Paylaşımları yeniden yükle
         const sharesResponse = await fetch(`/api/pages/${pageId}/share`)
@@ -297,13 +303,14 @@ export default function ShareModal({ pageId, onClose }: ShareModalProps) {
                 type="radio"
                 name="access"
                 checked={true}
+                readOnly
                 className="h-4 w-4 text-[#79B791] border-[#ABD1B5] focus:ring-[#79B791]"
               />
               <div className="flex items-center">
                 <Lock className="h-4 w-4 mr-2 text-[#13262F]" />
                 <div>
-                  <p className="text-sm font-medium text-[#13262F]">Kısıtlı</p>
-                  <p className="text-xs text-[#13262F]/70">Sadece davet ettiğiniz kişiler erişebilir</p>
+                  <p className="text-sm font-medium text-[#13262F]">Herkese Açık (Salt Okunur)</p>
+                  <p className="text-xs text-[#13262F]/70">Link ile herkes görüntüleyebilir, düzenleyemez</p>
                 </div>
               </div>
             </label>

@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyAuth } from "@/lib/auth"
 import { getMongoDb } from "@/lib/mongodb"
 import { ObjectId } from "mongodb"
-import { getUserByEmail } from "@/lib/db"
 import type { PageShare, Notification } from "@/lib/db-types"
+import crypto from "crypto"
 
 // Sayfa paylaşım API'si
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -58,6 +58,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return NextResponse.json({ success: false, message: "Sayfayı kendinizle paylaşamazsınız" }, { status: 400 })
     }
 
+    // Benzersiz davet token'ı oluştur
+    const inviteToken = crypto.randomBytes(32).toString("hex")
+
     // Zaten paylaşılmış mı kontrol et
     const existingShare = await db.collection("pageShares").findOne({
       pageId: new ObjectId(pageId),
@@ -65,24 +68,50 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
 
     if (existingShare) {
-      // Erişim seviyesini güncelle
+      // Erişim seviyesini ve token'ı güncelle
       await db.collection("pageShares").updateOne(
         { _id: existingShare._id },
         {
           $set: {
             accessLevel,
+            inviteToken,
+            status: "pending", // Yeni davet gönderildiği için pending yap
             updatedAt: new Date(),
           },
         },
       )
 
+      // Yeni bildirim oluştur
+      const notification: Notification = {
+        recipientEmail: email,
+        type: "share_invitation",
+        content: `${currentUser?.name || "Bir kullanıcı"} sizinle "${page.title}" sayfasını paylaştı.`,
+        link: `/app/invite/${inviteToken}`,
+        read: false,
+        createdAt: new Date(),
+      }
+
+      await db.collection("notifications").insertOne(notification)
+
+      // E-posta simülasyonu
+      console.log(`
+📧 E-POSTA GÖNDERİLDİ:
+Kime: ${email}
+Konu: ${currentUser?.name || "Bir kullanıcı"} sizinle "${page.title}" sayfasını paylaştı
+İçerik: Sayfaya erişmek için şu linke tıklayın: ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/app/invite/${inviteToken}
+Erişim Seviyesi: ${accessLevel === "edit" ? "Düzenleme" : "Görüntüleme"}
+      `)
+
       return NextResponse.json({
         success: true,
-        message: "Paylaşım erişim seviyesi güncellendi",
+        message: "Paylaşım erişim seviyesi güncellendi ve yeni davet gönderildi",
         share: {
           ...existingShare,
           accessLevel,
+          inviteToken,
+          status: "pending",
         },
+        inviteLink: `/app/invite/${inviteToken}`,
       })
     }
 
@@ -93,6 +122,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       sharedWithEmail: email,
       accessLevel,
       status: "pending",
+      inviteToken,
       createdAt: new Date(),
     }
 
@@ -103,27 +133,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       recipientEmail: email,
       type: "share_invitation",
       content: `${currentUser?.name || "Bir kullanıcı"} sizinle "${page.title}" sayfasını paylaştı.`,
-      link: `/app?page=${pageId}`,
+      link: `/app/invite/${inviteToken}`,
       read: false,
       createdAt: new Date(),
     }
 
     await db.collection("notifications").insertOne(notification)
 
-    // Davet edilen kullanıcı sistemde kayıtlı mı kontrol et
-    const invitedUser = await getUserByEmail(email)
-
-    // E-posta gönderme işlemi burada yapılabilir (gerçek uygulamada)
-    // Bu örnekte sadece simüle ediyoruz
-    console.log(`E-posta gönderildi: ${email} kullanıcısı "${page.title}" sayfasına davet edildi.`)
+    // E-posta simülasyonu
+    console.log(`
+📧 E-POSTA GÖNDERİLDİ:
+Kime: ${email}
+Konu: ${currentUser?.name || "Bir kullanıcı"} sizinle "${page.title}" sayfasını paylaştı
+İçerik: Sayfaya erişmek için şu linke tıklayın: ${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/app/invite/${inviteToken}
+Erişim Seviyesi: ${accessLevel === "edit" ? "Düzenleme" : "Görüntüleme"}
+    `)
 
     return NextResponse.json({
       success: true,
-      message: "Sayfa başarıyla paylaşıldı",
+      message: "Sayfa başarıyla paylaşıldı ve davet e-postası gönderildi",
       share: {
         _id: result.insertedId,
         ...newShare,
       },
+      inviteLink: `/app/invite/${inviteToken}`,
     })
   } catch (error) {
     console.error("Sayfa paylaşım hatası:", error)
