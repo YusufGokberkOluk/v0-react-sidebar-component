@@ -3,7 +3,7 @@ import { MongoClient, ServerApiVersion } from "mongodb"
 // MongoDB URI - Atlas connection string
 const MONGODB_URI =
   process.env.MONGODB_URI ||
-  "mongodb+srv://yusufgoluk:<db_password>@etudedatacluster.sl6layp.mongodb.net/?retryWrites=true&w=majority&appName=etudeDataCluster"
+  "mongodb+srv://yusufgoluk:yusufgoluk04@cluster0.ayglxsu.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 // Hata kontrolü
 if (!MONGODB_URI) {
